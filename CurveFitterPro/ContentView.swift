@@ -8,15 +8,19 @@
 import SwiftUI
 
 struct ContentView: View {
-    var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
-        }
-        .padding()
-    }
+	var body: some View {
+		TabView {
+			ProjectListView()
+				.tabItem { Label("Projects", systemImage: "folder") }
+			
+			ModelLibraryView()
+				.tabItem { Label("Models", systemImage: "function") }
+			
+			SettingsView()
+				.tabItem { Label("Settings", systemImage: "gearshape") }
+		}
+		.tint(.indigo)
+	}
 }
 
 #Preview {

@@ -58,7 +58,7 @@ struct DataImporter {
         return points.sorted { $0.x < $1.x }
     }
 
-    private static func detectDelimiter(in lines: [String]) -> Character {
+    private static func detectDelimiter(in lines: [String]) -> String {
         let sample = lines.prefix(5).joined()
         let commas = sample.filter { $0 == "," }.count
         let tabs = sample.filter { $0 == "\t" }.count

@@ -62,8 +62,8 @@ struct DataEditorView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-                ForEach(project.dataPoints) { point in
-                    DataPointRow(project: project, point: point)
+                ForEach(Array(project.dataPoints.enumerated()), id: \.offset) { index, point in
+                    DataPointRow(project: project, point: point, index: index)
                 }
                 .onDelete { offsets in
                     var pts = project.dataPoints
@@ -79,6 +79,7 @@ struct DataEditorView: View {
 struct DataPointRow: View {
     @Bindable var project: Project
     let point: DataPoint
+    let index: Int
 
     var body: some View {
         HStack {
@@ -89,10 +90,9 @@ struct DataPointRow: View {
                 get: { point.isOutlier },
                 set: { val in
                     var pts = project.dataPoints
-                    if let i = pts.firstIndex(where: { $0.id == point.id }) {
-                        pts[i].isOutlier = val
-                        project.dataPoints = pts
-                    }
+                    guard index < pts.count else { return }
+                    pts[index].isOutlier = val
+                    project.dataPoints = pts
                 }
             ))
             .frame(width: 60)

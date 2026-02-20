@@ -6,12 +6,13 @@
 //
 
 import SwiftUI
-
+import SwiftData
 @main
 struct CurveFitterProApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+				.modelContainer(for: [Project.self, UserModel.self])
         }
     }
 }
