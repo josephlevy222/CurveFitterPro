@@ -186,6 +186,16 @@ struct ModelLibrary {
             description: "Second-degree polynomial.",
             typicalUseCase: "Parabolic trajectories, calibration curves"
         ),
+        BuiltinModel(
+            name: "Cubic",
+            category: "Polynomial & Power",
+            equation: "y = a·x³ + b·x² + c·x + d",
+            expression: "a * x * x * x + b * x * x + c * x + d",
+            parameterNames: ["a", "b", "c", "d"],
+            defaultValues: [1.0, 0.0, 0.0, 0.0],
+            description: "Third-degree polynomial.",
+            typicalUseCase: "S-shaped calibration curves, nonlinear trends"
+        ),
 
         // ── Oscillation ───────────────────────────────────────────────────
         BuiltinModel(

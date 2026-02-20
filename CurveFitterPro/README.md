@@ -96,5 +96,5 @@ immediately.
 | Enzyme Kinetics | Michaelis-Menten, substrate inhibition |
 | Peak / Spectral | Gaussian, Lorentzian, asymmetric Gaussian |
 | Pharmacokinetics | One-compartment IV bolus, one-compartment oral |
-| Polynomial & Power | Power law, logarithmic, quadratic |
+| Polynomial & Power | Power law, logarithmic, quadratic, cubic | 
 | Oscillation | Damped sine wave, sine wave |
