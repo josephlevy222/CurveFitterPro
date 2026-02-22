@@ -342,7 +342,6 @@ struct PlotView: View {
     @Bindable var project: Project
     @ObservedObject var engine: FittingEngine
     @Binding var fitResult: FitResult?
-    @AppStorage("confidenceLevel") private var confidenceLevel = 95
     @State private var showConfidenceBand = true
     @State private var showResiduals = false
     // Cached computed data — only rebuilt when fitResult or confidenceLevel changes
@@ -359,8 +358,19 @@ struct PlotView: View {
                     mainPlot
                         .padding(.horizontal)
 
-                    Toggle("Show \(confidenceLevel)% Confidence Band", isOn: $showConfidenceBand)
-                        .padding(.horizontal)
+					HStack(spacing: 0) {
+                        Text("Show")
+                        Picker("", selection: Binding(
+                            get: { project.confidenceLevel },
+                            set: { project.confidenceLevel = $0 }
+                        )) {
+                            Text("90%").tag(90)
+                            Text("95%").tag(95)
+                            Text("99%").tag(99)
+                        }
+						Toggle("Confidence Band", isOn: $showConfidenceBand)
+                    }
+                    .padding(.horizontal)
 
                     if fitResult != nil {
                         Toggle("Show Residuals", isOn: $showResiduals)
@@ -376,7 +386,7 @@ struct PlotView: View {
             .padding(.vertical)
         }
         .onChange(of: fitResult?.residualSumOfSquares) { recomputePlotData() }
-        .onChange(of: confidenceLevel) { recomputePlotData() }
+        .onChange(of: project.confidenceLevel) { recomputePlotData() }
         .onAppear { recomputePlotData() }
     }
 
@@ -415,7 +425,7 @@ struct PlotView: View {
             covMatrix:       result.covarianceMatrix,
             expression:      expr,
             dof:             dof,
-            confidenceLevel: confidenceLevel
+            confidenceLevel: project.confidenceLevel
         )
         bandPoints = zip(curvePoints, band).map { pt, b in
             (x: pt.x, lower: b.lower, upper: b.upper)
@@ -695,18 +705,11 @@ struct SettingsView: View {
     @AppStorage("significantFigures") private var sigFigs = 6
     @AppStorage("defaultXLabel") private var xLabel = "X"
     @AppStorage("defaultYLabel") private var yLabel = "Y"
-    @AppStorage("confidenceLevel") private var confidenceLevel = 95
-
     var body: some View {
         NavigationStack {
             Form {
                 Section("Display") {
                     Stepper("Significant Figures: \(sigFigs)", value: $sigFigs, in: 3...10)
-                    Picker("Confidence Band", selection: $confidenceLevel) {
-                        Text("90%").tag(90)
-                        Text("95%").tag(95)
-                        Text("99%").tag(99)
-                    }
                 }
                 Section("Default Axis Labels") {
                     LabeledContent("X Axis") {

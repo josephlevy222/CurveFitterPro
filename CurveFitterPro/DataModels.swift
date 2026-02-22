@@ -174,6 +174,7 @@ class Project {
     var yAxisLog: Bool
     var showConfidenceBand: Bool
     var showResiduals: Bool
+    var confidenceLevel: Int
 
     // DataPoints stored as parallel Data blobs
     var dpXData:         Data = Data()
@@ -217,6 +218,7 @@ class Project {
         self.yAxisLog = false
         self.showConfidenceBand = true
         self.showResiduals = true
+        self.confidenceLevel = 95
     }
 }
 
