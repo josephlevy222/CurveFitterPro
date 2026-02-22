@@ -342,8 +342,12 @@ struct PlotView: View {
     @Bindable var project: Project
     @ObservedObject var engine: FittingEngine
     @Binding var fitResult: FitResult?
+    @AppStorage("confidenceLevel") private var confidenceLevel = 95
     @State private var showConfidenceBand = true
     @State private var showResiduals = false
+    // Cached computed data — only rebuilt when fitResult or confidenceLevel changes
+    @State private var curvePoints: [(x: Double, y: Double)] = []
+    @State private var bandPoints:  [(x: Double, lower: Double, upper: Double)] = []
 
     var body: some View {
         ScrollView {
@@ -355,7 +359,7 @@ struct PlotView: View {
                     mainPlot
                         .padding(.horizontal)
 
-                    Toggle("Show Confidence Band", isOn: $showConfidenceBand)
+                    Toggle("Show \(confidenceLevel)% Confidence Band", isOn: $showConfidenceBand)
                         .padding(.horizontal)
 
                     if fitResult != nil {
@@ -371,16 +375,70 @@ struct PlotView: View {
             }
             .padding(.vertical)
         }
+        .onChange(of: fitResult?.residualSumOfSquares) { recomputePlotData() }
+        .onChange(of: confidenceLevel) { recomputePlotData() }
+        .onAppear { recomputePlotData() }
     }
 
-    private var mainPlot: some View {
+    // Recompute curve and band whenever the fit result changes.
+    // Parameters are taken directly from result.parameters in order —
+    // never via a Dictionary — so name/value correspondence is always correct.
+    private func recomputePlotData() {
         let dataPoints = project.dataPoints
-        let result = fitResult
         let xs = dataPoints.map(\.x)
         let xMin = xs.min() ?? 0
         let xMax = xs.max() ?? 1
 
+        guard let result = fitResult,
+              let expr = try? CompiledExpression(source: project.modelExpression) else {
+            curvePoints = []
+            bandPoints  = []
+            return
+        }
+
+        // Use result.parameters order directly — Dictionary would lose ordering
+        let fittedParams = result.parameters.filter { $0.fittedValue != nil }
+        let paramNames   = fittedParams.map(\.name)
+        let paramValues  = fittedParams.compactMap(\.fittedValue)
+
+        curvePoints = engine.smoothCurve(xMin: xMin, xMax: xMax,
+                                         params: paramValues,
+                                         paramNames: paramNames,
+                                         expression: expr)
+
+        guard !result.covarianceMatrix.isEmpty else { bandPoints = []; return }
+        let dof  = max(1, dataPoints.count - fittedParams.count)
+        let band = engine.confidenceBand(
+            xValues:         curvePoints.map(\.x),
+            fittedParams:    paramValues,
+            paramNames:      paramNames,
+            covMatrix:       result.covarianceMatrix,
+            expression:      expr,
+            dof:             dof,
+            confidenceLevel: confidenceLevel
+        )
+        bandPoints = zip(curvePoints, band).map { pt, b in
+            (x: pt.x, lower: b.lower, upper: b.upper)
+        }
+    }
+
+    private var mainPlot: some View {
+        let dataPoints = project.dataPoints
+
         return Chart {
+            // Confidence band — drawn first so curve renders on top
+            if showConfidenceBand {
+                ForEach(Array(bandPoints.enumerated()), id: \.offset) { _, pt in
+                    AreaMark(
+                        x: .value("X", pt.x),
+                        yStart: .value("Lower", pt.lower),
+                        yEnd:   .value("Upper", pt.upper)
+                    )
+                    .foregroundStyle(.red.opacity(0.15))
+                    .interpolationMethod(.catmullRom)
+                }
+            }
+
             // Data points
             ForEach(dataPoints.filter { !$0.isOutlier }) { pt in
                 PointMark(x: .value("X", pt.x), y: .value("Y", pt.y))
@@ -394,20 +452,11 @@ struct PlotView: View {
             }
 
             // Fitted curve
-            if let result = result,
-               let expr = try? CompiledExpression(source: project.modelExpression) {
-                let params = result.parameters.compactMap { p -> (String, Double)? in
-                    guard let v = p.fittedValue else { return nil }
-                    return (p.name, v)
-                }
-                let paramDict = Dictionary(uniqueKeysWithValues: params)
-                let curve = engine.smoothCurve(xMin: xMin, xMax: xMax, params: Array(paramDict.values),
-                                               paramNames: Array(paramDict.keys), expression: expr)
-                ForEach(Array(curve.enumerated()), id: \.offset) { _, pt in
-                    LineMark(x: .value("X", pt.x), y: .value("Y", pt.y))
-                        .foregroundStyle(.red)
-                        .lineStyle(StrokeStyle(lineWidth: 2))
-                }
+            ForEach(Array(curvePoints.enumerated()), id: \.offset) { _, pt in
+                LineMark(x: .value("X", pt.x), y: .value("Y", pt.y))
+                    .foregroundStyle(.red)
+                    .lineStyle(StrokeStyle(lineWidth: 2))
+                    .interpolationMethod(.catmullRom)
             }
         }
         .chartXAxisLabel(project.xLabel)
@@ -646,12 +695,18 @@ struct SettingsView: View {
     @AppStorage("significantFigures") private var sigFigs = 6
     @AppStorage("defaultXLabel") private var xLabel = "X"
     @AppStorage("defaultYLabel") private var yLabel = "Y"
+    @AppStorage("confidenceLevel") private var confidenceLevel = 95
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("Display") {
                     Stepper("Significant Figures: \(sigFigs)", value: $sigFigs, in: 3...10)
+                    Picker("Confidence Band", selection: $confidenceLevel) {
+                        Text("90%").tag(90)
+                        Text("95%").tag(95)
+                        Text("99%").tag(99)
+                    }
                 }
                 Section("Default Axis Labels") {
                     LabeledContent("X Axis") {

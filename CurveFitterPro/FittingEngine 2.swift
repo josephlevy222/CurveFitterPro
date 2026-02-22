@@ -152,101 +152,173 @@ final class FittingEngine: ObservableObject {
         // ── Heavy compute off the main actor ─────────────────────────────
         let output: FitOutput? = await Task.detached(priority: .userInitiated) {
             try? await runFit(input)
-        }.value
-
-        // ── Back on main actor ────────────────────────────────────────────
-        isFitting = false
-        if let output {
-            statusMessage = output.converged
-                ? "Fit converged in \(output.iterations) iterations"
-                : output.message
-            return output.toFitResult()
-        } else {
-            statusMessage = "Fit failed — check expression and initial guesses"
-            return nil
-        }
-    }
-
-    // MARK: - Confidence Band
-    //
-    // All inputs are plain value types so this is safely callable from @MainActor.
-
-    func confidenceBand(
-        xValues: [Double],
-        fittedParams: [Double],
-        paramNames: [String],
-        covMatrix: [[Double]],
-        expression: CompiledExpression,
-        dof: Int
-    ) -> [(lower: Double, upper: Double)] {
-        let tCrit = FittingEngine.tCritical95(dof: dof)
-        let eps = 1e-6
-
-        return xValues.map { x in
-            let paramDict = Dictionary(uniqueKeysWithValues: zip(paramNames, fittedParams))
-            let yhat = (try? expression.evaluate(x: x, parameters: paramDict)) ?? .nan
-
-            var grad = Array(repeating: 0.0, count: fittedParams.count)
-            for j in 0..<fittedParams.count {
-                let delta = max(eps, abs(fittedParams[j]) * eps)
-                var pPlus  = fittedParams; pPlus[j]  += delta
-                var pMinus = fittedParams; pMinus[j] -= delta
-                let dPlus  = Dictionary(uniqueKeysWithValues: zip(paramNames, pPlus))
-                let dMinus = Dictionary(uniqueKeysWithValues: zip(paramNames, pMinus))
-                let yp = (try? expression.evaluate(x: x, parameters: dPlus))  ?? yhat
-                let ym = (try? expression.evaluate(x: x, parameters: dMinus)) ?? yhat
-                grad[j] = (yp - ym) / (2.0 * delta)
-            }
-
-            var variance = 0.0
-            for i in 0..<fittedParams.count {
-                for j in 0..<fittedParams.count {
-                    variance += grad[i] * covMatrix[i][j] * grad[j]
-                }
-            }
-            let halfWidth = tCrit * sqrt(max(0, variance))
-            return (yhat - halfWidth, yhat + halfWidth)
-        }
-    }
-
-    // MARK: - t critical value (95%, two-tailed)
-
-    static func tCritical95(dof: Int) -> Double {
-        switch dof {
-        case 1:       return 12.706
-        case 2:       return 4.303
-        case 3:       return 3.182
-        case 4:       return 2.776
-        case 5:       return 2.571
-        case 6:       return 2.447
-        case 7:       return 2.365
-        case 8:       return 2.306
-        case 9:       return 2.262
-        case 10:      return 2.228
-        case 11...20: return 2.086 + (2.228 - 2.086) * Double(20 - dof) / 9.0
-        case 21...30: return 2.042 + (2.086 - 2.042) * Double(30 - dof) / 9.0
-        default:
-            if dof >= 120 { return 1.960 }
-            return 1.960 + 1.0 / Double(dof)
-        }
-    }
-
-    // MARK: - Smooth curve for plotting
-
-    func smoothCurve(
-        xMin: Double,
-        xMax: Double,
-        nPoints: Int = 400,
-        params: [Double],
-        paramNames: [String],
-        expression: CompiledExpression
-    ) -> [(x: Double, y: Double)] {
-        let paramDict = Dictionary(uniqueKeysWithValues: zip(paramNames, params))
-        return (0..<nPoints).compactMap { i in
-            let x = xMin + (xMax - xMin) * Double(i) / Double(nPoints - 1)
-            guard let y = try? expression.evaluate(x: x, parameters: paramDict),
-                  y.isFinite else { return nil }
-            return (x, y)
-        }
-    }
+		}.value
+		
+		// ── Back on main actor ────────────────────────────────────────────
+		isFitting = false
+		if let output {
+			statusMessage = output.converged
+			? "Fit converged in \(output.iterations) iterations"
+			: output.message
+			return output.toFitResult()
+		} else {
+			statusMessage = "Fit failed — check expression and initial guesses"
+			return nil
+		}
+	}
+	
+	// MARK: - Confidence Band
+	//
+	// All inputs are plain value types so this is safely callable from @MainActor.
+	
+	func confidenceBand(
+		xValues: [Double],
+		fittedParams: [Double],
+		paramNames: [String],
+		covMatrix: [[Double]],
+		expression: CompiledExpression,
+		dof: Int,
+		confidenceLevel: Int = 95
+	) -> [(lower: Double, upper: Double)] {
+		let tCrit: Double
+		switch confidenceLevel {
+		case 90: tCrit = FittingEngine.tCritical90(dof: dof)
+		case 99: tCrit = FittingEngine.tCritical99(dof: dof)
+		default: tCrit = FittingEngine.tCritical95(dof: dof)
+		}
+		let eps = 1e-6
+		
+		return xValues.map { x in
+			let paramDict = Dictionary(uniqueKeysWithValues: zip(paramNames, fittedParams))
+			let yhat = (try? expression.evaluate(x: x, parameters: paramDict)) ?? .nan
+			
+			var grad = Array(repeating: 0.0, count: fittedParams.count)
+			for j in 0..<fittedParams.count {
+				let delta = max(eps, abs(fittedParams[j]) * eps)
+				var pPlus  = fittedParams; pPlus[j]  += delta
+				var pMinus = fittedParams; pMinus[j] -= delta
+				let dPlus  = Dictionary(uniqueKeysWithValues: zip(paramNames, pPlus))
+				let dMinus = Dictionary(uniqueKeysWithValues: zip(paramNames, pMinus))
+				let yp = (try? expression.evaluate(x: x, parameters: dPlus))  ?? yhat
+				let ym = (try? expression.evaluate(x: x, parameters: dMinus)) ?? yhat
+				grad[j] = (yp - ym) / (2.0 * delta)
+			}
+			
+			var variance = 0.0
+			for i in 0..<fittedParams.count {
+				for j in 0..<fittedParams.count {
+					variance += grad[i] * covMatrix[i][j] * grad[j]
+				}
+			}
+			let halfWidth = tCrit * sqrt(max(0, variance))
+			return (yhat - halfWidth, yhat + halfWidth)
+		}
+	}
+	
+	// MARK: - t critical value (95%, two-tailed)
+	
+	static func tCritical95(dof: Int) -> Double {
+		switch dof {
+		case 1:       return 12.706
+		case 2:       return 4.303
+		case 3:       return 3.182
+		case 4:       return 2.776
+		case 5:       return 2.571
+		case 6:       return 2.447
+		case 7:       return 2.365
+		case 8:       return 2.306
+		case 9:       return 2.262
+		case 10:      return 2.228
+		case 11...20: return 2.086 + (2.228 - 2.086) * Double(20 - dof) / 9.0
+		case 21...30: return 2.042 + (2.086 - 2.042) * Double(30 - dof) / 9.0
+		default:
+			if dof >= 120 { return 1.960 }
+			return 1.960 + 1.0 / Double(dof)
+		}
+	}
+	
+	// MARK: - Smooth curve for plotting
+	
+	func smoothCurve(
+		xMin: Double,
+		xMax: Double,
+		nPoints: Int = 400,
+		params: [Double],
+		paramNames: [String],
+		expression: CompiledExpression
+	) -> [(x: Double, y: Double)] {
+		let paramDict = Dictionary(uniqueKeysWithValues: zip(paramNames, params))
+		return (0..<nPoints).compactMap { i in
+			let x = xMin + (xMax - xMin) * Double(i) / Double(nPoints - 1)
+			guard let y = try? expression.evaluate(x: x, parameters: paramDict),
+				  y.isFinite else { return nil }
+			return (x, y)
+		}
+	}
+	
+	
+	// MARK: - t critical values (90%, two-tailed)
+	static func tCritical90(dof: Int) -> Double {
+		switch dof {
+		case 1:  return 6.314
+		case 2:  return 2.920
+		case 3:  return 2.353
+		case 4:  return 2.132
+		case 5:  return 2.015
+		case 6:  return 1.943
+		case 7:  return 1.895
+		case 8:  return 1.860
+		case 9:  return 1.833
+		case 10: return 1.812
+		case 11: return 1.796
+		case 12: return 1.782
+		case 13: return 1.771
+		case 14: return 1.761
+		case 15: return 1.753
+		case 16: return 1.746
+		case 17: return 1.740
+		case 18: return 1.734
+		case 19: return 1.729
+		case 20: return 1.725
+		case 21...25:  return 1.711
+		case 26...30:  return 1.697
+		case 31...40:  return 1.684
+		case 41...60:  return 1.671
+		case 61...120: return 1.658
+		default:       return 1.645   // z∞
+		}
+	}
+	
+	// MARK: - t critical values (99%, two-tailed)
+	static func tCritical99(dof: Int) -> Double {
+		switch dof {
+		case 1:  return 63.657
+		case 2:  return 9.925
+		case 3:  return 5.841
+		case 4:  return 4.604
+		case 5:  return 4.032
+		case 6:  return 3.707
+		case 7:  return 3.499
+		case 8:  return 3.355
+		case 9:  return 3.250
+		case 10: return 3.169
+		case 11: return 3.106
+		case 12: return 3.055
+		case 13: return 3.012
+		case 14: return 2.977
+		case 15: return 2.947
+		case 16: return 2.921
+		case 17: return 2.898
+		case 18: return 2.878
+		case 19: return 2.861
+		case 20: return 2.845
+		case 21...25:  return 2.797
+		case 26...30:  return 2.750
+		case 31...40:  return 2.704
+		case 41...60:  return 2.660
+		case 61...120: return 2.617
+		default:       return 2.576   // z∞
+		}
+	}
 }
+

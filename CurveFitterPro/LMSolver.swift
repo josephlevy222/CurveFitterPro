@@ -137,39 +137,15 @@ struct LMSolver {
             (0..<nParams).map { k in (0..<nData).reduce(0.0) { $0 + J[$1][k] * r[$1] } }
         }
 
-        // Helper: solve linear system A * x = b using Gaussian elimination with partial pivoting
+        // Solve A·x = b using LU decomposition.
+        // Reuses the static LU helpers defined at the bottom of the class.
         func solveLinear(_ A: [[Double]], _ b: [Double]) -> [Double]? {
-            let n = b.count
-            var mat = A.map { $0 + [0.0] }  // augmented matrix
-            for i in 0..<n {
-                mat[i][n] = b[i]
-            }
-
-            for col in 0..<n {
-                // Partial pivot
-                var maxRow = col
-                var maxVal = abs(mat[col][col])
-                for row in (col+1)..<n {
-                    if abs(mat[row][col]) > maxVal { maxVal = abs(mat[row][col]); maxRow = row }
-                }
-                if maxVal < 1e-14 { return nil }
-                mat.swapAt(col, maxRow)
-
-                let pivot = mat[col][col]
-                for row in (col+1)..<n {
-                    let factor = mat[row][col] / pivot
-                    for c in col...n { mat[row][c] -= factor * mat[col][c] }
-                }
-            }
-
-            // Back substitution
-            var x = Array(repeating: 0.0, count: n)
-            for i in stride(from: n-1, through: 0, by: -1) {
-                x[i] = mat[i][n]
-                for j in (i+1)..<n { x[i] -= mat[i][j] * x[j] }
-                x[i] /= mat[i][i]
-            }
-            return x
+            guard let (L, U, piv) = LMSolver.luDecompose(A) else { return nil }
+            // Apply the same permutation to b
+            var pb = Array(repeating: 0.0, count: b.count)
+            for i in 0..<b.count { pb[i] = b[piv[i]] }
+            let y = LMSolver.forwardSolve(L, pb)
+            return LMSolver.backSolve(U, y)
         }
 
         var currentResiduals = residuals(p)
@@ -240,14 +216,34 @@ struct LMSolver {
         let J = jacobian(p)
         let JTJ = jtj(J)
 
-        // Covariance matrix: s² × (JTJ)⁻¹
+        // Covariance matrix: solve JᵀJ · C = s²·I column by column.
+        //
+        // This avoids explicitly forming (JᵀJ)⁻¹. We factor JᵀJ once into
+        // P·A = L·U, then for each column j of the identity (scaled by s²)
+        // we solve L·y = P·(s²·eⱼ) and U·x = y. The resulting x is the
+        // j-th column of the covariance matrix. Numerically equivalent to
+        // s² · (JᵀJ)⁻¹ but without the explicit inversion step.
         let dof = max(1, nData - nParams)
         let s2 = currentRSS / Double(dof)
 
-        // Invert JTJ to get covariance
         var covMatrix = Array(repeating: Array(repeating: 0.0, count: nParams), count: nParams)
-        if let invJTJ = invertMatrix(JTJ) {
-            covMatrix = invJTJ.map { $0.map { $0 * s2 } }
+        if let (L, U, piv) = LMSolver.luDecompose(JTJ) {
+            // Condition check: large ratio of |U| diagonals → ill-conditioned
+            let diagU = (0..<nParams).map { abs(U[$0][$0]) }
+            let uMax = diagU.max() ?? 1
+            let uMin = diagU.min() ?? 1
+            let condProxy = uMax / max(uMin, 1e-300)
+            // Even if ill-conditioned we proceed; large SEs will signal the problem
+            _ = condProxy
+
+            for col in 0..<nParams {
+                // Build permuted s²·eⱼ: the col-th column of s²·I, permuted by P
+                var b = Array(repeating: 0.0, count: nParams)
+                for i in 0..<nParams { if piv[i] == col { b[i] = s2; break } }
+                let y = LMSolver.forwardSolve(L, b)
+                let x = LMSolver.backSolve(U, y)
+                for row in 0..<nParams { covMatrix[row][col] = x[row] }
+            }
         }
 
         let standardErrors = (0..<nParams).map { k in sqrt(max(0, covMatrix[k][k])) }
@@ -275,28 +271,74 @@ struct LMSolver {
         )
     }
 
-    // MARK: Matrix inversion via Gaussian elimination
+    // MARK: LU decomposition with partial pivoting
+    //
+    // Factors A into P·A = L·U where P is a permutation, L is unit lower
+    // triangular, and U is upper triangular.  Returns (L, U, pivot) or nil
+    // if the matrix is singular.
+    //
+    // Advantages over Gauss-Jordan inversion:
+    //   • More numerically stable for nearly-singular JᵀJ (correlated params)
+    //   • Condition number is readable from the diagonal of U
+    //   • The same factorisation can solve multiple right-hand sides cheaply
 
-    private static func invertMatrix(_ A: [[Double]]) -> [[Double]]? {
+    static func luDecompose(_ A: [[Double]])
+        -> (L: [[Double]], U: [[Double]], pivot: [Int])? {
+
         let n = A.count
-        // Augment with identity
-        var mat = (0..<n).map { i in A[i] + (0..<n).map { j in i == j ? 1.0 : 0.0 } }
+        var U = A                                          // copy; will become U
+        var L = Array(repeating: Array(repeating: 0.0, count: n), count: n)
+        var piv = Array(0..<n)                            // permutation indices
 
         for col in 0..<n {
+            // Partial pivot: find row with largest absolute value in this column
+            var maxVal = abs(U[col][col])
             var maxRow = col
-            var maxVal = abs(mat[col][col])
             for row in (col+1)..<n {
-                if abs(mat[row][col]) > maxVal { maxVal = abs(mat[row][col]); maxRow = row }
+                if abs(U[row][col]) > maxVal {
+                    maxVal = abs(U[row][col])
+                    maxRow = row
+                }
             }
+            // Singular or near-singular check
             if maxVal < 1e-14 { return nil }
-            mat.swapAt(col, maxRow)
-            let pivot = mat[col][col]
-            for c in 0..<(2*n) { mat[col][c] /= pivot }
-            for row in 0..<n where row != col {
-                let factor = mat[row][col]
-                for c in 0..<(2*n) { mat[row][c] -= factor * mat[col][c] }
+
+            // Swap rows in U, L (columns already filled), and pivot index
+            if maxRow != col {
+                U.swapAt(col, maxRow)
+                piv.swapAt(col, maxRow)
+                // Swap already-computed L columns
+                for k in 0..<col { let tmp = L[col][k]; L[col][k] = L[maxRow][k]; L[maxRow][k] = tmp }
+            }
+
+            L[col][col] = 1.0   // unit diagonal
+
+            for row in (col+1)..<n {
+                let factor = U[row][col] / U[col][col]
+                L[row][col] = factor
+                for c in col..<n { U[row][c] -= factor * U[col][c] }
             }
         }
-        return mat.map { Array($0[n..<(2*n)]) }
+        return (L, U, piv)
+    }
+
+    // Solve L·y = b (forward substitution, L is unit lower triangular)
+    static func forwardSolve(_ L: [[Double]], _ b: [Double]) -> [Double] {
+        let n = b.count
+        var y = Array(repeating: 0.0, count: n)
+        for i in 0..<n {
+            y[i] = b[i] - (0..<i).reduce(0.0) { $0 + L[i][$1] * y[$1] }
+        }
+        return y
+    }
+
+    // Solve U·x = y (back substitution, U is upper triangular)
+    static func backSolve(_ U: [[Double]], _ y: [Double]) -> [Double] {
+        let n = y.count
+        var x = Array(repeating: 0.0, count: n)
+        for i in stride(from: n-1, through: 0, by: -1) {
+            x[i] = (y[i] - ((i+1)..<n).reduce(0.0) { $0 + U[i][$1] * x[$1] }) / U[i][i]
+        }
+        return x
     }
 }
