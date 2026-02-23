@@ -37,10 +37,8 @@ struct DataEditorView: View {
 
             Section("Add Point") {
                 HStack {
-                    TextField("X", text: $newX)
-                        .keyboardType(.decimalPad)
-                    TextField("Y", text: $newY)
-                        .keyboardType(.decimalPad)
+                    NumericTextField("X", numericText: $newX)
+                    NumericTextField("Y", numericText: $newY)
                     Button("Add") {
                         guard let x = Double(newX), let y = Double(newY) else { return }
                         var pts = project.dataPoints
@@ -81,11 +79,36 @@ struct DataPointRow: View {
     let point: DataPoint
     let index: Int
 
+    // Local string state for editing — initialised from point values
+    @State private var xStr: String = ""
+    @State private var yStr: String = ""
+    @State private var wStr: String = ""
+
+    // Write edited strings back to the project data store
+    private func commit() {
+        var pts = project.dataPoints
+        guard index < pts.count else { return }
+        if let v = Double(xStr) { pts[index].x = v }
+        if let v = Double(yStr) { pts[index].y = v }
+        if let v = Double(wStr), v > 0 { pts[index].weight = v }
+        project.dataPoints = pts
+    }
+
     var body: some View {
         HStack {
-            Text(String(format: "%.4g", point.x)).frame(maxWidth: .infinity, alignment: .leading)
-            Text(String(format: "%.4g", point.y)).frame(maxWidth: .infinity, alignment: .leading)
-            Text(String(format: "%.2g", point.weight)).frame(width: 70)
+            NumericTextField("x", numericText: $xStr,
+                             onEditingChanged: { editing in if !editing { commit() } },
+                             onCommit: commit)
+                .frame(maxWidth: .infinity)
+            NumericTextField("y", numericText: $yStr,
+                             onEditingChanged: { editing in if !editing { commit() } },
+                             onCommit: commit)
+                .frame(maxWidth: .infinity)
+            NumericTextField("w", numericText: $wStr,
+                             style: NumericStringStyle(decimalSeparator: true, negatives: false, exponent: true),
+                             onEditingChanged: { editing in if !editing { commit() } },
+                             onCommit: commit)
+                .frame(width: 70)
             Toggle("", isOn: Binding(
                 get: { point.isOutlier },
                 set: { val in
@@ -99,6 +122,15 @@ struct DataPointRow: View {
         }
         .font(.system(.caption, design: .monospaced))
         .foregroundStyle(point.isOutlier ? .secondary : .primary)
+        .onAppear {
+            xStr = String(format: "%g", point.x)
+            yStr = String(format: "%g", point.y)
+            wStr = String(format: "%g", point.weight)
+        }
+        // Keep local strings in sync if external change updates the point
+        .onChange(of: point.x)      { xStr = String(format: "%g", point.x) }
+        .onChange(of: point.y)      { yStr = String(format: "%g", point.y) }
+        .onChange(of: point.weight) { wStr = String(format: "%g", point.weight) }
     }
 }
 
@@ -221,10 +253,12 @@ struct ParameterRow: View {
                         Text("Initial:")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        TextField("value", value: $param.initialValue, format: .number)
-                            .keyboardType(.decimalPad)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 120)
+                        NumericTextField("value", numericText: Binding(
+                            get: { String(format: "%g", param.initialValue) },
+                            set: { param.initialValue = Double($0) ?? param.initialValue }
+                        ))
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 120)
                     }
                 }
 
@@ -358,7 +392,7 @@ struct PlotView: View {
                     mainPlot
                         .padding(.horizontal)
 
-					HStack(spacing: 0) {
+                    HStack(spacing: 0) {
                         Text("Show")
                         Picker("", selection: Binding(
                             get: { project.confidenceLevel },
@@ -368,7 +402,7 @@ struct PlotView: View {
                             Text("95%").tag(95)
                             Text("99%").tag(99)
                         }
-						Toggle("Confidence Band", isOn: $showConfidenceBand)
+                        Toggle("Confidence Band", isOn: $showConfidenceBand)
                     }
                     .padding(.horizontal)
 
@@ -582,11 +616,10 @@ struct CustomModelSheet: View {
                         ForEach(Array(detectedParams.enumerated()), id: \.offset) { i, name in
                             HStack {
                                 Text(name).bold().frame(width: 60)
-                                TextField("1.0", text: Binding(
+                                NumericTextField("1.0", numericText: Binding(
                                     get: { i < defaultValues.count ? defaultValues[i] : "1.0" },
                                     set: { if i < defaultValues.count { defaultValues[i] = $0 } }
                                 ))
-                                .keyboardType(.decimalPad)
                             }
                         }
                     }
