@@ -169,6 +169,7 @@ class Project {
     var yLabel: String
     var modelName: String
     var modelExpression: String
+    var modelEquation: String
 
     var xAxisLog: Bool
     var yAxisLog: Bool
@@ -214,6 +215,7 @@ class Project {
         self.yLabel = "Y"
         self.modelName = ""
         self.modelExpression = ""
+        self.modelEquation = ""
         self.xAxisLog = false
         self.yAxisLog = false
         self.showConfidenceBand = true
@@ -221,6 +223,15 @@ class Project {
         self.confidenceLevel = 95
     }
 }
+
+// MARK: - Decode cache
+//
+// Avoids repeated blob decoding on every property access.
+// Cache is keyed on the Data identity (pointer+length) so it
+// invalidates automatically when the blob is replaced on write.
+
+private var _dpCache:    (key: Data, value: [DataPoint])?    = nil
+private var _paramCache: (key: Data, value: [FitParameter])? = nil
 
 // MARK: - Project convenience accessors
 
@@ -230,12 +241,14 @@ extension Project {
 
     var dataPoints: [DataPoint] {
         get {
+            // Use cached decode if the underlying blob hasn't changed
+            if let c = _dpCache, c.key == dpXData { return c.value }
             let xs  = dataToDoubles(dpXData)
             let ys  = dataToDoubles(dpYData)
             let ws  = dataToDoubles(dpWeightData)
             let os  = dataToBools(dpIsOutlierData)
-            guard !xs.isEmpty else { return [] }
-            return xs.indices.map { i in
+            guard !xs.isEmpty else { _dpCache = (dpXData, []); return [] }
+            let points = xs.indices.map { i in
                 DataPoint(
                     x:         xs[i],
                     y:         i < ys.count ? ys[i] : 0,
@@ -243,8 +256,11 @@ extension Project {
                     isOutlier: i < os.count ? os[i] : false
                 )
             }
+            _dpCache = (dpXData, points)
+            return points
         }
         set {
+            _dpCache        = nil   // invalidate cache
             dpXData         = doublesToData(newValue.map(\.x))
             dpYData         = doublesToData(newValue.map(\.y))
             dpWeightData    = doublesToData(newValue.map(\.weight))
@@ -257,9 +273,11 @@ extension Project {
 
     var parameters: [FitParameter] {
         get {
+            // Key on paramInitData as a proxy for the whole parameter set
+            if let c = _paramCache, c.key == paramInitData { return c.value }
             let names   = paramNamesCSV.isEmpty ? [] : paramNamesCSV.split(separator: ",").map(String.init)
             let count   = names.count
-            guard count > 0 else { return [] }
+            guard count > 0 else { _paramCache = (paramInitData, []); return [] }
             let initials = dataToDoubles(paramInitData)
             let lowers   = dataToDoubles(paramLowerData)
             let uppers   = dataToDoubles(paramUpperData)
@@ -267,7 +285,7 @@ extension Project {
             let ses      = dataToOptionalDoubles(paramSEData,     count: count)
             let ciLows   = dataToOptionalDoubles(paramCILowData,  count: count)
             let ciHighs  = dataToOptionalDoubles(paramCIHighData, count: count)
-            return names.indices.map { i in
+            let params = names.indices.map { i in
                 FitParameter(
                     name:                   names[i],
                     initialValue:           i < initials.count ? initials[i] : 1.0,
@@ -279,8 +297,11 @@ extension Project {
                     confidenceIntervalHigh: i < ciHighs.count  ? ciHighs[i]  : nil
                 )
             }
+            _paramCache = (paramInitData, params)
+            return params
         }
         set {
+            _paramCache     = nil   // invalidate cache
             paramNamesCSV   = newValue.map(\.name).joined(separator: ",")
             paramInitData   = doublesToData(newValue.map(\.initialValue))
             paramLowerData  = doublesToData(newValue.map(\.lowerBound))
@@ -304,7 +325,7 @@ extension Project {
                 cov = (0..<n).map { row in (0..<n).map { col in covFlat[row * n + col] } }
             }
             return FitResult(
-                parameters:           parameters,
+                parameters:           parameters,        // uses cached decode above
                 rSquared:             fitRSquared,
                 adjustedRSquared:     fitAdjR2,
                 residualSumOfSquares: fitRSS,
@@ -331,7 +352,7 @@ extension Project {
             fitFittedYData    = doublesToData(r.fittedY)
             fitCovData        = doublesToData(r.covarianceMatrix.flatMap { $0 })
             modifiedAt        = Date()
-            parameters        = r.parameters  // writes fitted values into param blobs
+            parameters        = r.parameters  // also invalidates _paramCache
         }
     }
 }

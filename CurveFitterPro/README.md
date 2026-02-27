@@ -91,10 +91,10 @@ immediately.
 
 | Category | Models |
 |---|---|
+| Polynomial & Power | Power law, logarithmic, quadratic, cubic | 
 | Growth & Decay | Single/double exponential decay, exponential growth, exponential plateau |
 | Sigmoidal / Dose-Response | 4PL, Hill equation, Boltzmann sigmoid |
 | Enzyme Kinetics | Michaelis-Menten, substrate inhibition |
 | Peak / Spectral | Gaussian, Lorentzian, asymmetric Gaussian |
 | Pharmacokinetics | One-compartment IV bolus, one-compartment oral |
-| Polynomial & Power | Power law, logarithmic, quadratic, cubic | 
 | Oscillation | Damped sine wave, sine wave |

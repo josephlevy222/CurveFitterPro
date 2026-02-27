@@ -1,0 +1,42 @@
+{
+  "originHash" : "8b451a267c921d88fc76f13b3393111493c437b2c3e81be444a96acdad45718a",
+  "pins" : [
+    {
+      "identity" : "editabletext",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/josephlevy222/EditableText.git",
+      "state" : {
+        "branch" : "test",
+        "revision" : "7b0434208046cb762e04f1c5142c0170bf7797ff"
+      }
+    },
+    {
+      "identity" : "numerictextfield",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/josephlevy222/NumericTextField.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "d41e64fbf42ea554400b546f0abca2293f3992ae"
+      }
+    },
+    {
+      "identity" : "utilities",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/josephlevy222/Utilities.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "4fc441f12445f8e3098012007981d5fd21dcff47"
+      }
+    },
+    {
+      "identity" : "xyplot",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/josephlevy222/XYPlot.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "9093717e4166c97782e6329bd7e26446207bb0cf"
+      }
+    }
+  ],
+  "version" : 3
+}

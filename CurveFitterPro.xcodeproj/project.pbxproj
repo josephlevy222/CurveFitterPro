@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		378762FD2F4E45BE004695BA /* XYPlot in Frameworks */ = {isa = PBXBuildFile; productRef = 378762FC2F4E45BE004695BA /* XYPlot */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		37FA88562F47853200235712 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				378762FD2F4E45BE004695BA /* XYPlot in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +117,7 @@
 			);
 			name = CurveFitterPro;
 			packageProductDependencies = (
+				378762FC2F4E45BE004695BA /* XYPlot */,
 			);
 			productName = CurveFitterPro;
 			productReference = 37FA88482F47852C00235712 /* CurveFitterPro.app */;
@@ -195,6 +201,9 @@
 			);
 			mainGroup = 37FA883F2F47852C00235712;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				378762FB2F4E45BE004695BA /* XCRemoteSwiftPackageReference "XYPlot" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 37FA88492F47852C00235712 /* Products */;
 			projectDirPath = "";
@@ -322,7 +331,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -380,7 +389,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -580,6 +589,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		378762FB2F4E45BE004695BA /* XCRemoteSwiftPackageReference "XYPlot" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/josephlevy222/XYPlot.git";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		378762FC2F4E45BE004695BA /* XYPlot */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 378762FB2F4E45BE004695BA /* XCRemoteSwiftPackageReference "XYPlot" */;
+			productName = XYPlot;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 37FA88402F47852C00235712 /* Project object */;
 }

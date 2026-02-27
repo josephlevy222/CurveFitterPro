@@ -5,6 +5,57 @@ import Foundation
 struct ModelLibrary {
 
     static let all: [BuiltinModel] = [
+		// ── Polynomial & Power ────────────────────────────────────────────
+		BuiltinModel(
+			name: "Linear",
+			category: "Polynomial & Power",
+			equation: "y = a·x + b",
+			expression: "a * x + b",
+			parameterNames: ["a", "b"],
+			defaultValues: [1.0, 0.0],
+			description: "Straight line through data.",
+			typicalUseCase: "Calibration curves, linear relationships, Beer-Lambert law"
+			),
+		BuiltinModel(
+			name: "Quadratic",
+			category: "Polynomial & Power",
+			equation: "y = a·x² + b·x + c",
+			expression: "a * x * x + b * x + c",
+			parameterNames: ["a", "b", "c"],
+			defaultValues: [1.0, 0.0, 0.0],
+			description: "Second-degree polynomial.",
+			typicalUseCase: "Parabolic trajectories, calibration curves"
+		),
+		BuiltinModel(
+			name: "Cubic",
+			category: "Polynomial & Power",
+			equation: "y = a·x³ + b·x² + c·x + d",
+			expression: "a * x * x * x + b * x * x + c * x + d",
+			parameterNames: ["a", "b", "c", "d"],
+			defaultValues: [1.0, 0.0, 0.0, 0.0],
+			description: "Third-degree polynomial.",
+			typicalUseCase: "S-shaped calibration curves, nonlinear trends"
+		),
+		BuiltinModel(
+			name: "Power Law",
+			category: "Polynomial & Power",
+			equation: "y = a · x^b",
+			expression: "a * pow(x, b)",
+			parameterNames: ["a", "b"],
+			defaultValues: [1.0, 1.0],
+			description: "Power law (allometric) relationship.",
+			typicalUseCase: "Allometry, fractal scaling, economy of scale"
+		),
+		BuiltinModel(
+			name: "Logarithmic",
+			category: "Polynomial & Power",
+			equation: "y = a · ln(x) + b",
+			expression: "a * log(x) + b",
+			parameterNames: ["a", "b"],
+			defaultValues: [1.0, 0.0],
+			description: "Logarithmic relationship.",
+			typicalUseCase: "Psychophysics (Weber-Fechner), adsorption isotherms"
+		),
         // ── Growth & Decay ────────────────────────────────────────────────
         BuiltinModel(
             name: "Single Exponential Decay",
@@ -153,48 +204,6 @@ struct ModelLibrary {
             defaultValues: [1.0, 100.0, 1.0, 0.1, 10.0],
             description: "One-compartment oral absorption PK model.",
             typicalUseCase: "Oral drug absorption and elimination"
-        ),
-
-        // ── Polynomial & Power ────────────────────────────────────────────
-        BuiltinModel(
-            name: "Power Law",
-            category: "Polynomial & Power",
-            equation: "y = a · x^b",
-            expression: "a * pow(x, b)",
-            parameterNames: ["a", "b"],
-            defaultValues: [1.0, 1.0],
-            description: "Power law (allometric) relationship.",
-            typicalUseCase: "Allometry, fractal scaling, economy of scale"
-        ),
-        BuiltinModel(
-            name: "Logarithmic",
-            category: "Polynomial & Power",
-            equation: "y = a · ln(x) + b",
-            expression: "a * log(x) + b",
-            parameterNames: ["a", "b"],
-            defaultValues: [1.0, 0.0],
-            description: "Logarithmic relationship.",
-            typicalUseCase: "Psychophysics (Weber-Fechner), adsorption isotherms"
-        ),
-        BuiltinModel(
-            name: "Quadratic",
-            category: "Polynomial & Power",
-            equation: "y = a·x² + b·x + c",
-            expression: "a * x * x + b * x + c",
-            parameterNames: ["a", "b", "c"],
-            defaultValues: [1.0, 0.0, 0.0],
-            description: "Second-degree polynomial.",
-            typicalUseCase: "Parabolic trajectories, calibration curves"
-        ),
-        BuiltinModel(
-            name: "Cubic",
-            category: "Polynomial & Power",
-            equation: "y = a·x³ + b·x² + c·x + d",
-            expression: "a * x * x * x + b * x * x + c * x + d",
-            parameterNames: ["a", "b", "c", "d"],
-            defaultValues: [1.0, 0.0, 0.0, 0.0],
-            description: "Third-degree polynomial.",
-            typicalUseCase: "S-shaped calibration curves, nonlinear trends"
         ),
 
         // ── Oscillation ───────────────────────────────────────────────────

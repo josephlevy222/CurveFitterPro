@@ -28,27 +28,29 @@ struct ProjectDetailView: View {
 
             Divider()
 
-            TabView(selection: $selectedTab) {
-                DataEditorView(project: project, showImport: $showImport)
-                    .tag(0)
-                ModelSetupView(project: project,
-                               showModelPicker: $showModelPicker,
-                               showCustomModel: $showCustomModel)
-                    .tag(1)
-                FitRunView(project: project, engine: engine, fitResult: $fitResult)
-                    .tag(2)
-                PlotView(project: project, engine: engine, fitResult: $fitResult)
-                    .tag(3)
+            // if-based switcher — inactive views are destroyed, saving memory.
+            // Keyboard avoidance works correctly unlike .page TabView.
+            Group {
+                if selectedTab == 0 {
+                    DataEditorView(project: project, showImport: $showImport)
+                } else if selectedTab == 1 {
+                    ModelSetupView(project: project,
+                                   showModelPicker: $showModelPicker,
+                                   showCustomModel: $showCustomModel)
+                } else if selectedTab == 2 {
+                    FitRunView(project: project, engine: engine, fitResult: $fitResult)
+                } else {
+                    PlotView(project: project, engine: engine, fitResult: $fitResult)
+                }
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
         }
         .navigationTitle(project.name)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             // Restore persisted result on load
-            if fitResult == nil {
+            //if fitResult == nil {
                 fitResult = project.fitResult
-            }
+           // }
         }
         .sheet(isPresented: $showModelPicker) {
             ModelPickerSheet { model in
@@ -60,6 +62,7 @@ struct ProjectDetailView: View {
             CustomModelSheet { expr, paramNames, defaults in
                 project.modelName = "Custom"
                 project.modelExpression = expr
+                project.modelEquation = ""
                 project.parameters = zip(paramNames, defaults).map {
                     FitParameter(name: $0.0, initialValue: $0.1)
                 }
@@ -83,6 +86,7 @@ struct ProjectDetailView: View {
     private func applyModel(_ model: BuiltinModel) {
         project.modelName = model.name
         project.modelExpression = model.expression
+        project.modelEquation = model.equation
         project.parameters = model.makeParameters()
         project.fitResult = nil
         fitResult = nil
