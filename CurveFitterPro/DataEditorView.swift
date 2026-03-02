@@ -29,7 +29,15 @@ struct DataEditorView: View {
                             }
                         } label: {
                             Label("Paste", systemImage: "clipboard")
-                        }
+						}
+						Spacer()
+						Button {
+							var pts = project.dataPoints
+							pts.sort { $0.x < $1.x }
+							project.dataPoints = pts
+						} label: {
+							Label( "Sort", systemImage: "arrow.down")
+						}
                         Spacer()
                         Button {
                             addRow()
@@ -62,7 +70,8 @@ struct DataEditorView: View {
                             index: index,
                             focus: $focus,
                             focusField: $focusField,
-                            onNext: { advanceFocus(from: index) }
+                            onNext: { advanceFocus(from: index) },
+                            onLoseFocus: { sortData() }
                         )
                         .id("row-\(index)")
                     }
@@ -84,13 +93,21 @@ struct DataEditorView: View {
 
     private func addRow() {
         var pts = project.dataPoints
-        pts.append(DataPoint(x: 0, y: 0))
+        // Insert at the beginning instead of appending
+        pts.insert(DataPoint(x: 0, y: 0), at: 0)
         project.dataPoints = pts
-        let newIndex = pts.count - 1
+        
         focusField = .x
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            focus = newIndex
+            focus = 0  // Focus on the new first row
         }
+    }
+
+    /// Sort data points by X value
+    private func sortData() {
+        var pts = project.dataPoints
+        pts.sort { $0.x < $1.x }
+        project.dataPoints = pts
     }
 
     /// Move focus to next field, then next row, then dismiss
@@ -109,7 +126,9 @@ struct DataEditorView: View {
                 focusField = .x
                 focus = nextIndex
             } else {
+                // When we reach the last field, sort the data
                 focus = nil
+                sortData()
             }
         }
     }
@@ -124,6 +143,7 @@ struct DataPointRow: View {
     var focus: FocusState<Int?>.Binding
     @Binding var focusField: DataEditorView.RowField
     let onNext: () -> Void
+    let onLoseFocus: () -> Void
 
     @State private var xStr: String = ""
     @State private var yStr: String = ""
@@ -138,24 +158,6 @@ struct DataPointRow: View {
         if let v = Double(yStr), v.isFinite { pts[index].y = v }
         if let v = Double(wStr), v.isFinite, v > 0 { pts[index].weight = v }
         project.dataPoints = pts
-    }
-
-    private func commitAndSort() {
-        var pts = project.dataPoints
-        guard index < pts.count else { return }
-        if let v = Double(xStr), v.isFinite { pts[index].x = v }
-        if let v = Double(yStr), v.isFinite { pts[index].y = v }
-        if let v = Double(wStr), v.isFinite, v > 0 { pts[index].weight = v }
-        let id = pts[index].id
-        pts.sort { $0.x < $1.x }
-        project.dataPoints = pts
-        // Restore focus to wherever row ended up (if focus is still in this row)
-        if let newIndex = pts.firstIndex(where: { $0.id == id }),
-           focus.wrappedValue == index {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                focus.wrappedValue = newIndex
-            }
-        }
     }
 
     // Pre-compute opacities to avoid complex inline expressions
@@ -202,13 +204,16 @@ struct DataPointRow: View {
         }
         .font(.system(.caption, design: .monospaced))
         .foregroundStyle(point.isOutlier ? .secondary : .primary)
-        .onAppear {
-            xStr = String(format: "%g", point.x)
-            yStr = String(format: "%g", point.y)
-            wStr = String(format: "%g", point.weight)
-        }
+		.onAppear {
+			xStr = point.x.isNaN ? "" : String(format: "%g", point.x)
+			yStr = point.y.isNaN ? "" : String(format: "%g", point.y)
+			wStr = String(format: "%g", point.weight)
+		}
         .onChange(of: focus.wrappedValue) { oldRow, newRow in
-            if oldRow == index && newRow != index { commitAndSort() }
+            // When leaving this row, trigger the sort
+            if oldRow == index && newRow != index { 
+                onLoseFocus()
+            }
         }
         .onChange(of: point.x)      { _, v in xStr = String(format: "%g", v) }
         .onChange(of: point.y)      { _, v in yStr = String(format: "%g", v) }
