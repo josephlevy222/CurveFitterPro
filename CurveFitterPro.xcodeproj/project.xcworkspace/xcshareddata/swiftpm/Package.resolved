@@ -16,7 +16,7 @@
       "location" : "https://github.com/josephlevy222/NumericTextField.git",
       "state" : {
         "branch" : "main",
-        "revision" : "d41e64fbf42ea554400b546f0abca2293f3992ae"
+        "revision" : "4da04cf556f6619672d19fea76bcaff3169d569d"
       }
     },
     {
@@ -34,7 +34,7 @@
       "location" : "https://github.com/josephlevy222/XYPlot.git",
       "state" : {
         "branch" : "main",
-        "revision" : "9093717e4166c97782e6329bd7e26446207bb0cf"
+        "revision" : "d2e1a75b6465bd4fba805cb27d602dfd71814890"
       }
     }
   ],

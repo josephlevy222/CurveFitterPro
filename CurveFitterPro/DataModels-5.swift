@@ -226,12 +226,11 @@ class Project {
 
 // MARK: - Decode cache
 //
-// Avoids repeated blob decoding on every property access.
-// Cache is keyed on the Data identity (pointer+length) so it
-// invalidates automatically when the blob is replaced on write.
+// Keyed on (project id, data blob) so projects with identical initial
+// values don't collide — the root cause of cross-project parameter bleed.
 
-private var _dpCache:    (key: Data, value: [DataPoint])?    = nil
-private var _paramCache: (key: Data, value: [FitParameter])? = nil
+private var _dpCache:    (id: UUID, key: Data, value: [DataPoint])?    = nil
+private var _paramCache: (id: UUID, key: Data, value: [FitParameter])? = nil
 
 // MARK: - Project convenience accessors
 
@@ -242,12 +241,12 @@ extension Project {
     var dataPoints: [DataPoint] {
         get {
             // Use cached decode if the underlying blob hasn't changed
-            if let c = _dpCache, c.key == dpXData { return c.value }
+            if let c = _dpCache, c.id == id, c.key == dpXData { return c.value }
             let xs  = dataToDoubles(dpXData)
             let ys  = dataToDoubles(dpYData)
             let ws  = dataToDoubles(dpWeightData)
             let os  = dataToBools(dpIsOutlierData)
-            guard !xs.isEmpty else { _dpCache = (dpXData, []); return [] }
+            guard !xs.isEmpty else { _dpCache = (id, dpXData, []); return [] }
             let points = xs.indices.map { i in
                 DataPoint(
                     x:         xs[i],
@@ -256,7 +255,7 @@ extension Project {
                     isOutlier: i < os.count ? os[i] : false
                 )
             }
-            _dpCache = (dpXData, points)
+            _dpCache = (id, dpXData, points)
             return points
         }
         set {
@@ -274,10 +273,10 @@ extension Project {
     var parameters: [FitParameter] {
         get {
             // Key on paramInitData as a proxy for the whole parameter set
-            if let c = _paramCache, c.key == paramInitData { return c.value }
+            if let c = _paramCache, c.id == id, c.key == paramInitData { return c.value }
             let names   = paramNamesCSV.isEmpty ? [] : paramNamesCSV.split(separator: ",").map(String.init)
             let count   = names.count
-            guard count > 0 else { _paramCache = (paramInitData, []); return [] }
+            guard count > 0 else { _paramCache = (id, paramInitData, []); return [] }
             let initials = dataToDoubles(paramInitData)
             let lowers   = dataToDoubles(paramLowerData)
             let uppers   = dataToDoubles(paramUpperData)
@@ -297,7 +296,7 @@ extension Project {
                     confidenceIntervalHigh: i < ciHighs.count  ? ciHighs[i]  : nil
                 )
             }
-            _paramCache = (paramInitData, params)
+            _paramCache = (id, paramInitData, params)
             return params
         }
         set {

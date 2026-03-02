@@ -46,12 +46,10 @@ struct ProjectDetailView: View {
         }
         .navigationTitle(project.name)
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            // Restore persisted result on load
-            //if fitResult == nil {
-                fitResult = project.fitResult
-           // }
-        }
+		.onAppear {
+			// Restore persisted result on load
+			fitResult = project.fitResult
+		}
         .sheet(isPresented: $showModelPicker) {
             ModelPickerSheet { model in
                 applyModel(model)
