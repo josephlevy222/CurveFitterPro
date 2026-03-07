@@ -52,49 +52,89 @@ struct ModelSetupView: View {
 
 struct ParameterRow: View {
     @Binding var param: FitParameter
-    @State private var showBounds = false
+    @State private var initialStr: String = ""
+    @State private var editingInitial = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
+            HStack(alignment: .top) {
                 Text(param.name)
                     .font(.headline)
-                    .frame(width: 60, alignment: .leading)
+                    .frame(width: 40, alignment: .leading)
 
-                if let v = param.fittedValue {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Fitted: \(String(format: "%.6g", v))")
-                            .font(.subheadline)
-                        if let se = param.standardError {
-                            Text("SE: \(String(format: "%.4g", se))")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                } else {
-                    HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    // Initial value — always editable
+                    HStack(spacing: 6) {
                         Text("Initial:")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        NumericTextField("value", numericText: Binding(
-                            get: { String(format: "%g", param.initialValue) },
-                            set: { param.initialValue = Double($0) ?? param.initialValue }
-                        ))
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 120)
+                        NumericTextField("value", numericText: $initialStr,
+                                         onEditingChanged: { editing in
+                                             if !editing {
+                                                 param.initialValue = Double(initialStr) ?? param.initialValue
+                                             }
+                                         })
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 110)
+
+                        // If there's a non-converged fitted value, offer to use it as initial
+                        if let fitted = param.fittedValue, param.fittedValue != nil {
+                            Button {
+                                param.initialValue = fitted
+                                initialStr = String(format: "%g", fitted)
+                            } label: {
+                                Image(systemName: "arrow.uturn.left.circle")
+                                    .foregroundStyle(.orange)
+                            }
+                            .buttonStyle(.borderless)
+                            .help("Use fitted value as initial value")
+                        }
+                    }
+
+                    // Fitted result — shown when available
+                    if let v = param.fittedValue {
+                        HStack(spacing: 16) {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text("Fitted")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                Text(String(format: "%.6g", v))
+                                    .font(.system(.subheadline, design: .monospaced))
+                            }
+                            if let se = param.standardError {
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text("±SE")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                    Text(String(format: "%.4g", se))
+                                        .font(.system(.caption, design: .monospaced))
+                                }
+                            }
+                            if let lo = param.confidenceIntervalLow,
+                               let hi = param.confidenceIntervalHigh {
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text("95% CI")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                    Text("[\(String(format: "%.4g", lo)), \(String(format: "%.4g", hi))]")
+                                        .font(.system(.caption2, design: .monospaced))
+                                }
+                            }
+                        }
                     }
                 }
 
                 Spacer()
-                if let lo = param.confidenceIntervalLow, let hi = param.confidenceIntervalHigh {
-                    Text("95% CI\n[\(String(format: "%.4g", lo)), \(String(format: "%.4g", hi))]")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.trailing)
-                }
             }
         }
         .padding(.vertical, 4)
+        .onAppear {
+            initialStr = String(format: "%g", param.initialValue)
+        }
+        .onChange(of: param.initialValue) { _, v in
+            // Keep field in sync if initialValue changed externally (e.g. "use fitted" button)
+            let s = String(format: "%g", v)
+            if initialStr != s { initialStr = s }
+        }
     }
 }
-

@@ -31,6 +31,8 @@ struct DataEditorView: View {
     @State private var isEditing = false
     @State private var pendingSort = false
     @State private var sortTask: Task<Void, Never>? = nil
+    @State private var pasteError: String? = nil
+    @State private var showPasteError = false
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -42,10 +44,19 @@ struct DataEditorView: View {
                         }
                         Spacer()
                         Button {
-                            if let text = UIPasteboard.general.string,
-                               let points = try? DataImporter.parse(text: text) {
+                            guard let text = UIPasteboard.general.string,
+                                  !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                                pasteError = "No text found on the clipboard."
+                                showPasteError = true
+                                return
+                            }
+                            do {
+                                let points = try DataImporter.parse(text: text)
                                 project.dataPoints = points
                                 focusedField = nil
+                            } catch {
+                                pasteError = error.localizedDescription
+                                showPasteError = true
                             }
                         } label: {
                             Label("Paste", systemImage: "clipboard")
@@ -106,6 +117,11 @@ struct DataEditorView: View {
                 // Clean up pending sort task
                 sortTask?.cancel()
                 sortTask = nil
+            }
+            .alert("Paste Error", isPresented: $showPasteError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(pasteError ?? "Unknown error")
             }
             .onChange(of: focusedField) { oldValue, newValue in
                 // Handle focus changes

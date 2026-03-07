@@ -37,6 +37,7 @@ struct PlotView: View {
                             Text("95%").tag(95)
                             Text("99%").tag(99)
                         }
+						.fixedSize()
                         Toggle("Confidence Band", isOn: Binding(get: { project.showConfidenceBand }, set: { project.showConfidenceBand = $0 }))
                     }
                     .padding(.horizontal)
@@ -87,82 +88,99 @@ struct PlotView: View {
     // Parameters are taken directly from result.parameters in order —
     // never via a Dictionary — so name/value correspondence is always correct.
     private func recomputePlotData() {
-        // When no fit result, still build plot data so raw data points are shown
-        guard let result = fitResult else {
-            curvePoints = []
-            if !project.showConfidenceBand { bandPoints = [] }
-            buildPlotData()
-            return
-        }
-
         // Capture all values needed off-main-actor before entering Task
-        let dataPoints    = project.dataPoints
-        let finiteXs      = dataPoints.map(\.x).filter(\.isFinite)
-        let xMin          = finiteXs.min() ?? 0
-        let xMax          = finiteXs.max() ?? 1
-        let expression    = project.modelExpression
+        let dataPoints      = project.dataPoints
+        let finiteXs        = dataPoints.map(\.x).filter(\.isFinite)
+        let xMin            = finiteXs.min() ?? 0
+        let xMax            = finiteXs.max() ?? 1
+        let expression      = project.modelExpression
         let confidenceLevel = project.confidenceLevel
-        let showBand      = project.showConfidenceBand
-        let covMatrix     = result.covarianceMatrix
-        let fittedParams  = result.parameters.filter { $0.fittedValue != nil }
-        let paramNames    = fittedParams.map(\.name)
-        let paramValues   = fittedParams.compactMap(\.fittedValue)
-        let dof           = max(1, dataPoints.count - fittedParams.count)
-        let engineRef     = engine
+        let showBand        = project.showConfidenceBand
+        let plotKey         = "xyplot-main-\(project.id)"
+        let engineRef       = engine
+
+        // Snapshot fit result data (nil is valid — means show raw data only)
+        let covMatrix    = fitResult?.covarianceMatrix ?? []
+        let fittedParams = fitResult?.parameters.filter { $0.fittedValue != nil } ?? []
+        let paramNames   = fittedParams.map(\.name)
+        let paramValues  = fittedParams.compactMap(\.fittedValue)
+        let dof          = max(1, dataPoints.count - fittedParams.count)
 
         computeTask?.cancel()
         computeTask = Task.detached(priority: .userInitiated) {
-            guard let expr = try? await CompiledExpression(source: expression) else {
-                await MainActor.run { curvePoints = []; bandPoints = [] }
-                return
-            }
+            // ── Pre-read UserDefaults off the main actor ──────────────────
+            // This is the primary source of the axes-before-curve flash:
+            // doing it here means buildPlotData() on main does no I/O at all.
+            var probe = PlotData(plotLines: [], settings: PlotSettings(savePoints: false), plotName: plotKey)
+            probe.readFromUserDefaults()
+            let preloadedProbe = probe
 
-            let curve = await engineRef.smoothCurve(xMin: xMin, xMax: xMax,
+            let residualKey = "xyplot-residual-\(plotKey.dropFirst("xyplot-main-".count))"
+            var resProbe = PlotData(plotLines: [], settings: PlotSettings(savePoints: false), plotName: residualKey)
+            resProbe.readFromUserDefaults()
+            let preloadedResidualProbe = resProbe
+
+            // ── Curve and band computation ────────────────────────────────
+            var curve: [(x: Double, y: Double)] = []
+            var computedBand: [(x: Double, lower: Double, upper: Double)] = []
+
+            if !expression.isEmpty && !paramValues.isEmpty,
+			   let expr = try? await CompiledExpression(source: expression) {
+                curve = await engineRef.smoothCurve(xMin: xMin, xMax: xMax,
                                                     params: paramValues,
                                                     paramNames: paramNames,
                                                     expression: expr)
 
-            var computedBand: [(x: Double, lower: Double, upper: Double)] = []
-            if showBand && !covMatrix.isEmpty {
-                let b = await engineRef.confidenceBand(
-                    xValues:         curve.map(\.x),
-                    fittedParams:    paramValues,
-                    paramNames:      paramNames,
-                    covMatrix:       covMatrix,
-                    expression:      expr,
-                    dof:             dof,
-                    confidenceLevel: confidenceLevel
-                )
-                computedBand = zip(curve, b).compactMap { pt, bv in
-                    guard bv.lower.isFinite && bv.upper.isFinite else { return nil }
-                    return (x: pt.x, lower: bv.lower, upper: bv.upper)
+                if showBand && !covMatrix.isEmpty {
+                    let b = await engineRef.confidenceBand(
+                        xValues:         curve.map(\.x),
+                        fittedParams:    paramValues,
+                        paramNames:      paramNames,
+                        covMatrix:       covMatrix,
+                        expression:      expr,
+                        dof:             dof,
+                        confidenceLevel: confidenceLevel
+                    )
+                    computedBand = zip(curve, b).compactMap { pt, bv in
+                        guard bv.lower.isFinite && bv.upper.isFinite else { return nil }
+                        return (x: pt.x, lower: bv.lower, upper: bv.upper)
+                    }
                 }
             }
 
-            let finalBand = computedBand
             guard !Task.isCancelled else { return }
+			let finalCurve = curve
+			let finalBand = computedBand
             await MainActor.run {
-                curvePoints = curve
-                bandPoints  = finalBand
-                buildPlotData()
+                curvePoints = finalCurve
+                bandPoints  = showBand ? finalBand : []
+                buildPlotData(preloadedProbe: preloadedProbe, residualProbe: preloadedResidualProbe)
             }
         }
     }
 
     /// Builds XYPlot PlotData from computed curve, band, and raw data points.
     /// Called whenever curvePoints or bandPoints are updated.
-    private func buildPlotData() {
+    /// `preloadedProbe`: a PlotData already populated via readFromUserDefaults(),
+    /// read off the main actor in the detached task to avoid blocking the UI.
+    /// Pass nil only when calling outside of a task context (e.g. band color sync).
+    private func buildPlotData(preloadedProbe: PlotData? = nil, residualProbe: PlotData? = nil) {
         let dataPoints = project.dataPoints.filter { $0.x.isFinite && $0.y.isFinite }
         let inliers  = dataPoints.filter { !$0.isOutlier }
         let outliers = dataPoints.filter(  \.isOutlier )
 
-        // ── Helper: read existing PlotLine from plotData or probe UserDefaults,
-        //    falling back to a default. This preserves user style/color edits.
+        // ── Helper: restore existing PlotLine from in-memory plotData first,
+        //    then from the pre-loaded probe (read off-main in the detached task),
+        //    falling back to a default. No UserDefaults I/O on the main actor.
         let plotKey = "xyplot-main-\(project.id)"
         func existingLine(at index: Int, default defaultLine: PlotLine) -> PlotLine {
             if plotData.plotLines.count > index { return plotData.plotLines[index] }
-            var probe = PlotData(plotLines: [], settings: PlotSettings(savePoints: false), plotName: plotKey)
-            probe.readFromUserDefaults()
+            // Use the probe that was pre-read off the main actor
+            let probe: PlotData = preloadedProbe ?? {
+                var p = PlotData(plotLines: [], settings: PlotSettings(savePoints: false), plotName: plotKey)
+                p.readFromUserDefaults()
+                return p
+            }()
             if probe.plotLines.count > index { return probe.plotLines[index] }
             return defaultLine
         }
@@ -281,9 +299,13 @@ struct PlotView: View {
                 legend: false,
                 savePoints: false
             )
-            // Probe UserDefaults to restore positions and other persisted settings
-            var probe = PlotData(plotLines: [], settings: baseSettings, plotName: plotKey)
-            probe.readFromUserDefaults()
+            // Use pre-loaded probe (read off the main actor in the detached task)
+            // to restore persisted settings without blocking the main actor.
+            let probe: PlotData = preloadedProbe ?? {
+                var p = PlotData(plotLines: [], settings: baseSettings, plotName: plotKey)
+                p.readFromUserDefaults()
+                return p
+            }()
             // Take persisted settings but always refresh titles, savePoints, annotation
             // Only restore legend from UserDefaults if real data was previously saved;
             // otherwise default to hidden (legend:false)
@@ -355,8 +377,11 @@ struct PlotView: View {
             legend: false,
             savePoints: false
         )
-        var resProbe = PlotData(plotLines: [], settings: baseResSettings, plotName: residualKey)
-        resProbe.readFromUserDefaults()
+        let resProbe: PlotData = residualProbe ?? {
+            var p = PlotData(plotLines: [], settings: baseResSettings, plotName: residualKey)
+            p.readFromUserDefaults()
+            return p
+        }()
         baseResSettings = resProbe.settings
         baseResSettings.title = resProbe.settings.title.characters.isEmpty
             ? AttributedString(resTitleStr) : resProbe.settings.title
@@ -371,9 +396,20 @@ struct PlotView: View {
 
     // MARK: - Publication-quality main plot (XYPlot)
 
+    // plotName is nil on the empty stub PlotData assigned in onAppear before the
+    // detached task completes.  Suppress XYPlot entirely until buildPlotData() has
+    // run at least once and stamped the real plotName — otherwise XYPlot renders
+    // a first pass with default 0…1 axes before the data arrives.
     private var mainPlot: some View {
-        XYPlot(data: $plotData)
-            .frame(maxHeight: .infinity)
+        Group {
+            if plotData.plotName != nil {
+                XYPlot(data: $plotData)
+            } else {
+				ProgressView()
+					.frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .frame(maxHeight: .infinity)
     }
 
 
@@ -436,8 +472,14 @@ struct PlotView: View {
     // MARK: - Residuals plot (XYPlot)
 
     private var residualPlot: some View {
-        XYPlot(data: $residualData)
-            .frame(height: 200)
+        Group {
+            if residualData.plotName != nil {
+                XYPlot(data: $residualData)
+            } else {
+                Color.clear
+            }
+        }
+        .frame(height: 200)
     }
 }
 
