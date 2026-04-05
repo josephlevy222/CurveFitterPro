@@ -1,3 +1,4 @@
+//#if false
 import SwiftUI
 import Charts
 import XYPlot
@@ -6,6 +7,9 @@ import Utilities
 
 struct PlotView: View {
     @Environment(\.colorScheme) private var colorScheme
+	@Environment(\.keyboardVisible) var keyboardVisible
+	@Environment(\.keyboardHeight) var keyboardHeight
+
     @Bindable var project: Project
     @ObservedObject var engine: FittingEngine
     @Binding var fitResult: FitResult?
@@ -15,45 +19,92 @@ struct PlotView: View {
     @State private var computeTask: Task<Void, Never>? = nil
     // Annotation box corner — cycles on tap
     // XYPlot data — rebuilt from curvePoints/bandPoints/dataPoints
+    @State private var mainPlotHeight: CGFloat = 500
+    @State private var pendingScrollAnchor: String? = nil
+    @State private var controlsHeight: CGFloat = 80
     @State private var plotData: PlotData = PlotData(settings: PlotSettings(savePoints: false))
     @State private var residualData: PlotData = PlotData(settings: PlotSettings(savePoints: false))
-
+	//@State private var keyboardShowing = false
+	
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        // GeometryReader measures the natural height once (before keyboard).
+        // That value is stored in mainPlotHeight and used to pin the main plot
+        // inside the ScrollView so it never collapses when the keyboard appears.
+        GeometryReader { geo in
+        ScrollViewReader { scrollProxy in
+        ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                Color.clear.frame(height: 0).id("plotTop")
                 if project.dataPoints.isEmpty {
                     ContentUnavailableView("No Data", systemImage: "chart.xyaxis.line",
                                            description: Text("Import or enter data first."))
-                } else {
+				} else {
+                    let plotH = max(100, geo.size.height - controlsHeight + keyboardHeight)
                     mainPlot
+                        .frame(height: plotH)
+                        .simultaneousGesture(titleTapGesture(
+                            frameHeight: plotH,
+                            topAnchor: "plotTop",
+                            bottomAnchor: "plotBottom",
+                            scrollProxy: scrollProxy))
                         .padding(.horizontal)
-
-                    HStack(spacing: 0) {
-                        Text("Show")
-                        Picker("", selection: Binding(
-                            get: { project.confidenceLevel },
-                            set: { project.confidenceLevel = $0 }
-                        )) {
-                            Text("90%").tag(90)
-                            Text("95%").tag(95)
-                            Text("99%").tag(99)
-                        }
-						.fixedSize()
-                        Toggle("Confidence Band", isOn: Binding(get: { project.showConfidenceBand }, set: { project.showConfidenceBand = $0 }))
-                    }
-                    .padding(.horizontal)
-
-                    if fitResult != nil {
-                        Toggle("Show Residuals", isOn: Binding(get: { project.showResiduals }, set: { project.showResiduals = $0 }))
-                            .padding(.horizontal)
-
-                        if project.showResiduals {
-                            residualPlot
-                                .padding(.horizontal)
-                        }
-                    }
-                }
+					VStack(spacing: 0) {
+						HStack(spacing: 0) {
+							Text("Show")
+							Picker("", selection: Binding(
+								get: { project.confidenceLevel },
+								set: { project.confidenceLevel = $0 }
+							)) {
+								Text("90%").tag(90)
+								Text("95%").tag(95)
+								Text("99%").tag(99)
+							}
+							Toggle("Confidence Band", isOn: Binding(get: { project.showConfidenceBand },
+																	set: { project.showConfidenceBand = $0 }))
+						}
+						.padding(.horizontal)
+						
+						Color.clear.frame(height: 0).id("plotBottom")
+						if fitResult != nil {
+							Toggle("Show Residuals", isOn: Binding(get: { project.showResiduals },
+																   set: { project.showResiduals = $0 }))
+								.padding(.horizontal)
+							
+							if project.showResiduals {
+								Color.clear.frame(height: 0).id("residualTop")
+								residualPlot
+									.frame(height: 200)
+									.simultaneousGesture(titleTapGesture(
+										frameHeight: 200,
+										topAnchor: "residualTop",
+										bottomAnchor: "residualBottom",
+										scrollProxy: scrollProxy))
+									.padding(.horizontal)
+								Color.clear.frame(height: 0).id("residualBottom")
+							}
+						}
+					}
+					.padding(.vertical)
+					.captureHeight(in: $controlsHeight)
+				}
             }
-        .padding(.vertical)
+            //.padding(.vertical)
+        } // ScrollView
+        .onChange(of: keyboardHeight) { _, height in
+            // Keyboard just appeared — now the ScrollView has overflow from the
+            // padding above. Fire any pending scroll that was recorded in the gesture.
+            guard height > 0, let anchor = pendingScrollAnchor else { return }
+            let unitAnchor: UnitPoint = anchor.contains("Top") ? .top : .bottom
+            withAnimation { scrollProxy.scrollTo(anchor, anchor: unitAnchor) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                withAnimation { scrollProxy.scrollTo(anchor, anchor: unitAnchor) }
+                pendingScrollAnchor = nil
+            }
+        }
+        //.scrollDismissesKeyboard(.interactively)
+        } // ScrollViewReader
+
+        } // GeometryReader
         .onChange(of: fitResult?.residualSumOfSquares) { _, _ in recomputePlotData() }
         .onChange(of: project.confidenceLevel) { _, _ in recomputePlotData() }
         .onChange(of: project.showConfidenceBand) { _, newValue in
@@ -84,103 +135,84 @@ struct PlotView: View {
     }
 
 
-    // Recompute curve and band whenever the fit result changes.
-    // Parameters are taken directly from result.parameters in order —
-    // never via a Dictionary — so name/value correspondence is always correct.
+    // Recompute curve and band whenever the fit result changes.  Parameters are taken directly from
+	// result.parameters in order — never via a Dictionary — so name/value correspondence is always correct.
     private func recomputePlotData() {
-        // Capture all values needed off-main-actor before entering Task
-        let dataPoints      = project.dataPoints
-        let finiteXs        = dataPoints.map(\.x).filter(\.isFinite)
-        let xMin            = finiteXs.min() ?? 0
-        let xMax            = finiteXs.max() ?? 1
-        let expression      = project.modelExpression
-        let confidenceLevel = project.confidenceLevel
-        let showBand        = project.showConfidenceBand
-        let plotKey         = "xyplot-main-\(project.id)"
-        let engineRef       = engine
+        // When no fit result, still build plot data so raw data points are shown
+        guard let result = fitResult else {
+            curvePoints = []
+            if !project.showConfidenceBand { bandPoints = [] }
+            buildPlotData()
+            return
+        }
 
-        // Snapshot fit result data (nil is valid — means show raw data only)
-        let covMatrix    = fitResult?.covarianceMatrix ?? []
-        let fittedParams = fitResult?.parameters.filter { $0.fittedValue != nil } ?? []
-        let paramNames   = fittedParams.map(\.name)
-        let paramValues  = fittedParams.compactMap(\.fittedValue)
-        let dof          = max(1, dataPoints.count - fittedParams.count)
+        // Capture all values needed off-main-actor before entering Task
+        let dataPoints    = project.dataPoints
+        let finiteXs      = dataPoints.map(\.x).filter(\.isFinite)
+        let xMin          = finiteXs.min() ?? 0
+        let xMax          = finiteXs.max() ?? 1
+        let expression    = project.modelExpression
+        let confidenceLevel = project.confidenceLevel
+        let showBand      = project.showConfidenceBand
+        let covMatrix     = result.covarianceMatrix
+        let fittedParams  = result.parameters.filter { $0.fittedValue != nil }
+        let paramNames    = fittedParams.map(\.name)
+        let paramValues   = fittedParams.compactMap(\.fittedValue)
+        let dof           = max(1, dataPoints.count - fittedParams.count)
+        let engineRef     = engine
 
         computeTask?.cancel()
         computeTask = Task.detached(priority: .userInitiated) {
-            // ── Pre-read UserDefaults off the main actor ──────────────────
-            // This is the primary source of the axes-before-curve flash:
-            // doing it here means buildPlotData() on main does no I/O at all.
-            var probe = PlotData(plotLines: [], settings: PlotSettings(savePoints: false), plotName: plotKey)
-            probe.readFromUserDefaults()
-            let preloadedProbe = probe
+            guard let expr = try? await CompiledExpression(source: expression) else {
+                await MainActor.run { curvePoints = []; bandPoints = [] }
+                return
+            }
 
-            let residualKey = "xyplot-residual-\(plotKey.dropFirst("xyplot-main-".count))"
-            var resProbe = PlotData(plotLines: [], settings: PlotSettings(savePoints: false), plotName: residualKey)
-            resProbe.readFromUserDefaults()
-            let preloadedResidualProbe = resProbe
-
-            // ── Curve and band computation ────────────────────────────────
-            var curve: [(x: Double, y: Double)] = []
-            var computedBand: [(x: Double, lower: Double, upper: Double)] = []
-
-            if !expression.isEmpty && !paramValues.isEmpty,
-			   let expr = try? await CompiledExpression(source: expression) {
-                curve = await engineRef.smoothCurve(xMin: xMin, xMax: xMax,
+            let curve = await engineRef.smoothCurve(xMin: xMin, xMax: xMax,
                                                     params: paramValues,
                                                     paramNames: paramNames,
                                                     expression: expr)
 
-                if showBand && !covMatrix.isEmpty {
-                    let b = await engineRef.confidenceBand(
-                        xValues:         curve.map(\.x),
-                        fittedParams:    paramValues,
-                        paramNames:      paramNames,
-                        covMatrix:       covMatrix,
-                        expression:      expr,
-                        dof:             dof,
-                        confidenceLevel: confidenceLevel
-                    )
-                    computedBand = zip(curve, b).compactMap { pt, bv in
-                        guard bv.lower.isFinite && bv.upper.isFinite else { return nil }
-                        return (x: pt.x, lower: bv.lower, upper: bv.upper)
-                    }
+            var computedBand: [(x: Double, lower: Double, upper: Double)] = []
+            if showBand && !covMatrix.isEmpty {
+                let b = await engineRef.confidenceBand(
+                    xValues:         curve.map(\.x),
+                    fittedParams:    paramValues,
+                    paramNames:      paramNames,
+                    covMatrix:       covMatrix,
+                    expression:      expr,
+                    dof:             dof,
+                    confidenceLevel: confidenceLevel
+                )
+                computedBand = zip(curve, b).compactMap { pt, bv in
+                    guard bv.lower.isFinite && bv.upper.isFinite else { return nil }
+                    return (x: pt.x, lower: bv.lower, upper: bv.upper)
                 }
             }
 
+            let finalBand = computedBand
             guard !Task.isCancelled else { return }
-			let finalCurve = curve
-			let finalBand = computedBand
             await MainActor.run {
-                curvePoints = finalCurve
-                bandPoints  = showBand ? finalBand : []
-                buildPlotData(preloadedProbe: preloadedProbe, residualProbe: preloadedResidualProbe)
+                curvePoints = curve
+                bandPoints  = finalBand
+                buildPlotData()
             }
         }
     }
 
-    /// Builds XYPlot PlotData from computed curve, band, and raw data points.
-    /// Called whenever curvePoints or bandPoints are updated.
-    /// `preloadedProbe`: a PlotData already populated via readFromUserDefaults(),
-    /// read off the main actor in the detached task to avoid blocking the UI.
-    /// Pass nil only when calling outside of a task context (e.g. band color sync).
-    private func buildPlotData(preloadedProbe: PlotData? = nil, residualProbe: PlotData? = nil) {
+    /// Builds XYPlot PlotData from computed curve, band, and raw data points.  Called whenever curvePoints or bandPoints are updated.
+    private func buildPlotData() {
         let dataPoints = project.dataPoints.filter { $0.x.isFinite && $0.y.isFinite }
         let inliers  = dataPoints.filter { !$0.isOutlier }
         let outliers = dataPoints.filter(  \.isOutlier )
 
-        // ── Helper: restore existing PlotLine from in-memory plotData first,
-        //    then from the pre-loaded probe (read off-main in the detached task),
-        //    falling back to a default. No UserDefaults I/O on the main actor.
+        // ── Helper: read existing PlotLine from plotData or probe UserDefaults,
+        //    falling back to a default. This preserves user style/color edits.
         let plotKey = "xyplot-main-\(project.id)"
         func existingLine(at index: Int, default defaultLine: PlotLine) -> PlotLine {
             if plotData.plotLines.count > index { return plotData.plotLines[index] }
-            // Use the probe that was pre-read off the main actor
-            let probe: PlotData = preloadedProbe ?? {
-                var p = PlotData(plotLines: [], settings: PlotSettings(savePoints: false), plotName: plotKey)
-                p.readFromUserDefaults()
-                return p
-            }()
+            var probe = PlotData(plotLines: [], settings: PlotSettings(savePoints: false), plotName: plotKey)
+            probe.readFromUserDefaults()
             if probe.plotLines.count > index { return probe.plotLines[index] }
             return defaultLine
         }
@@ -198,13 +230,12 @@ struct PlotView: View {
             .map { PlotPoint($0.x, $0.y) }
 
         // ── Inlier data points (indices 2 & 3) ───────────────────────────
-        // Double-draw trick: white disc underneath, colored disc on top
-        // Default inlier color matches the fit line color
+        // Double-draw trick: white disc underneath, colored disc on top.  Default inlier color matches the fit line color
         let defaultInlierColor = curveLine.lineColor
         var inlierWhite = existingLine(at: 2, default: PlotLine(
             lineColor: .clear,
             pointColor: .white,
-            pointShape: PointShape(Circle().path, fill: true, color: .white, size: 1.4),
+			pointShape: PointShape(Circle().path, fill: true, color: .white, size: 1.4),
             legend: nil
         ))
         var inlierDark = existingLine(at: 3, default: PlotLine(
@@ -280,18 +311,14 @@ struct PlotView: View {
         }()
 
         if plotData.plotName == plotKey {
-            // Already initialised — mutate a local copy then assign once
-            // to avoid "onChange tried to update multiple times per frame"
+            /// Already initialised — mutate a local copy then assign once to avoid "onChange trying to update multiple times per frame"
             var updated = plotData
             updated.plotLines = lines
-            updated.plotBands = bands
-            updated.scaleAxes()
             updated.plotBands = bands
             updated.settings.annotation = annotationText
             plotData = updated
         } else {
-            // First time for this project — build with defaults then restore
-            // persisted settings (legend/annotation positions, axis ranges, etc.)
+            /// First time for this project — build with defaults then restore persisted settings (legend/annotation positions, axis ranges, etc.)
             var baseSettings = PlotSettings(
                 title: AttributedString(project.name),
                 xAxis: AxisParameters(title: xAttr),
@@ -299,16 +326,11 @@ struct PlotView: View {
                 legend: false,
                 savePoints: false
             )
-            // Use pre-loaded probe (read off the main actor in the detached task)
-            // to restore persisted settings without blocking the main actor.
-            let probe: PlotData = preloadedProbe ?? {
-                var p = PlotData(plotLines: [], settings: baseSettings, plotName: plotKey)
-                p.readFromUserDefaults()
-                return p
-            }()
-            // Take persisted settings but always refresh titles, savePoints, annotation
-            // Only restore legend from UserDefaults if real data was previously saved;
-            // otherwise default to hidden (legend:false)
+            // Probe UserDefaults to restore positions and other persisted settings
+            var probe = PlotData(plotLines: [], settings: baseSettings, plotName: plotKey)
+            probe.readFromUserDefaults()
+            /// Take persisted settings but always refresh titles, savePoints, annotation Only restore legend from UserDefaults if real data was previously saved;
+            /// otherwise default to hidden (legend:false)
             let hadSavedData = probe.settings != baseSettings
             baseSettings = probe.settings
             baseSettings.title = probe.settings.title.characters.isEmpty
@@ -342,8 +364,7 @@ struct PlotView: View {
             pointShape: PointShape(Circle().path, fill: true, color: .orange, size: 1.0),
             legend: nil
         )
-        // Stems as thin vertical lines from zero — one PlotLine per point
-        // XYPlot doesn't have RuleMark, so we approximate with short line segments
+        /// Stems as thin vertical lines from zero — one PlotLine per point XYPlot doesn't have RuleMark, so we approximate with short line segments
         var stemLines: [PlotLine] = []
         for (pt, res) in pairs {
             var stem = PlotLine(lineColor: Color(.systemGray4), lineStyle: StrokeStyle(lineWidth: 1),
@@ -377,11 +398,8 @@ struct PlotView: View {
             legend: false,
             savePoints: false
         )
-        let resProbe: PlotData = residualProbe ?? {
-            var p = PlotData(plotLines: [], settings: baseResSettings, plotName: residualKey)
-            p.readFromUserDefaults()
-            return p
-        }()
+        var resProbe = PlotData(plotLines: [], settings: baseResSettings, plotName: residualKey)
+        resProbe.readFromUserDefaults()
         baseResSettings = resProbe.settings
         baseResSettings.title = resProbe.settings.title.characters.isEmpty
             ? AttributedString(resTitleStr) : resProbe.settings.title
@@ -394,24 +412,42 @@ struct PlotView: View {
         residualData = newResidual
     }
 
-    // MARK: - Publication-quality main plot (XYPlot)
-
-    // plotName is nil on the empty stub PlotData assigned in onAppear before the
-    // detached task completes.  Suppress XYPlot entirely until buildPlotData() has
-    // run at least once and stamped the real plotName — otherwise XYPlot renders
-    // a first pass with default 0…1 axes before the data arrives.
-    private var mainPlot: some View {
-        Group {
-            if plotData.plotName != nil {
-                XYPlot(data: $plotData)
-            } else {
-				ProgressView()
-					.frame(maxWidth: .infinity, maxHeight: .infinity)
+    /// Returns a gesture that detects taps in the title zones of an XYPlot and scrolls to the appropriate anchor so the title is visible above the keyboard.
+    /// Top 15% = plot title, bottom 15% = x-axis title.
+    private func titleTapGesture(frameHeight: CGFloat,
+                                  topAnchor: String,
+                                  bottomAnchor: String,
+                                  scrollProxy: ScrollViewProxy) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onEnded { value in
+                let fraction = value.location.y / frameHeight
+                guard fraction < 0.15 || fraction > 0.85 else { return }
+                let anchor = fraction < 0.15 ? topAnchor : bottomAnchor
+                let unitAnchor: UnitPoint = fraction < 0.15 ? .top : .bottom
+                if keyboardHeight > 0 {
+                    // Keyboard already up — ScrollView already overflowing, scroll now
+                    withAnimation { scrollProxy.scrollTo(anchor, anchor: unitAnchor) }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        withAnimation { scrollProxy.scrollTo(anchor, anchor: unitAnchor) }
+                    }
+                } else {
+                    /// Keyboard not yet up — record where to scroll and wait for keyboardHeight to update, which triggers onChange below
+                    pendingScrollAnchor = anchor
+                }
             }
-        }
-        .frame(maxHeight: .infinity)
     }
 
+    // MARK: - Publication-quality main plot (XYPlot)
+
+    private var mainPlot: some View {
+        XYPlot(data: $plotData)
+    }
+	
+	// MARK: - Residuals plot (XYPlot)
+	
+	private var residualPlot: some View {
+		XYPlot(data: $residualData)
+	}
 
     /// Substitutes fitted values into the mathematical equation template.
     /// Falls back to substituting into the expression if no equation template stored.
@@ -469,17 +505,5 @@ struct PlotView: View {
             .frame(width: 16)
     }
 
-    // MARK: - Residuals plot (XYPlot)
-
-    private var residualPlot: some View {
-        Group {
-            if residualData.plotName != nil {
-                XYPlot(data: $residualData)
-            } else {
-                Color.clear
-            }
-        }
-        .frame(height: 200)
-    }
 }
-
+//#endif

@@ -160,7 +160,7 @@ struct DataEditorView: View {
         project.dataPoints = pts
         
         // Set focus to new row's X field after the view updates
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+        DispatchQueue.main.asyncAfter(deadline: .now() /*+ 0.15*/) {
             focusedField = .row(id: newPoint.id, column: .x)
         }
     }

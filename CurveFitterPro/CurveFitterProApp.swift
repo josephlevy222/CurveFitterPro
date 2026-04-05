@@ -13,6 +13,7 @@ struct CurveFitterProApp: App {
         WindowGroup {
             ContentView()
 				.modelContainer(for: [Project.self, UserModel.self])
+				.keyboardObserver()
         }
     }
 }

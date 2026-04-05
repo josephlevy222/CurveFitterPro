@@ -7,7 +7,7 @@
       "location" : "https://github.com/josephlevy222/EditableText.git",
       "state" : {
         "branch" : "test",
-        "revision" : "585bc16389777f9517f7f8cd0461cc295a78d3bd"
+        "revision" : "cb62b320d030d343019c3636e7492f60f36d5bd8"
       }
     },
     {
@@ -16,7 +16,7 @@
       "location" : "https://github.com/josephlevy222/NumericTextField.git",
       "state" : {
         "branch" : "main",
-        "revision" : "4b93451665855e9a3c1c22f7b7a28602ce41fde2"
+        "revision" : "c45773758d5dfa0449f4bd21a6ec335cca7ec9ca"
       }
     },
     {
@@ -34,7 +34,7 @@
       "location" : "https://github.com/josephlevy222/XYPlot.git",
       "state" : {
         "branch" : "main",
-        "revision" : "bb6a63df05c2ff9979ed361b4a0e5a8ae3e63869"
+        "revision" : "67e39b3f87e5df9739f2f0d1e53642141afce3b5"
       }
     }
   ],

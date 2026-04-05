@@ -9,6 +9,7 @@ struct SettingsView: View {
     @AppStorage("defaultXLabel") private var xLabel = "X"
     @AppStorage("defaultYLabel") private var yLabel = "Y"
     var body: some View {
+		let _ = print("body of SettingsView")
         NavigationStack {
             Form {
                 Section("Display") {

@@ -217,12 +217,10 @@ struct LMSolver {
         let JTJ = jtj(J)
 
         // Covariance matrix: solve JᵀJ · C = s²·I column by column.
-        //
-        // This avoids explicitly forming (JᵀJ)⁻¹. We factor JᵀJ once into
-        // P·A = L·U, then for each column j of the identity (scaled by s²)
-        // we solve L·y = P·(s²·eⱼ) and U·x = y. The resulting x is the
-        // j-th column of the covariance matrix. Numerically equivalent to
-        // s² · (JᵀJ)⁻¹ but without the explicit inversion step.
+        ///
+        /// This avoids explicitly forming (JᵀJ)⁻¹. We factor JᵀJ once into P·A = L·U, then for each column j of the identity (scaled by s²)
+        /// we solve L·y = P·(s²·eⱼ) and U·x = y. The resulting x is the j-th column of the covariance matrix. Numerically equivalent to
+        /// s² · (JᵀJ)⁻¹ but without the explicit inversion step.
         let dof = max(1, nData - nParams)
         let s2 = currentRSS / Double(dof)
 
@@ -273,14 +271,11 @@ struct LMSolver {
 
     // MARK: LU decomposition with partial pivoting
     //
-    // Factors A into P·A = L·U where P is a permutation, L is unit lower
-    // triangular, and U is upper triangular.  Returns (L, U, pivot) or nil
-    // if the matrix is singular.
-    //
-    // Advantages over Gauss-Jordan inversion:
-    //   • More numerically stable for nearly-singular JᵀJ (correlated params)
-    //   • Condition number is readable from the diagonal of U
-    //   • The same factorisation can solve multiple right-hand sides cheaply
+    /// Factors A into P·A = L·U where P is a permutation, L is unit lower triangular, and U is upper triangular.  Returns (L, U, pivot) or nil if the matrix is singular.
+    /// Advantages over Gauss-Jordan inversion:
+    ///   • More numerically stable for nearly-singular JᵀJ (correlated params)
+    ///   • Condition number is readable from the diagonal of U
+    ///   • The same factorisation can solve multiple right-hand sides cheaply
 
     static func luDecompose(_ A: [[Double]])
         -> (L: [[Double]], U: [[Double]], pivot: [Int])? {

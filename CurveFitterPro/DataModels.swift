@@ -207,6 +207,7 @@ class Project {
     var fitCovData:       Data = Data()  // row-major nParams×nParams
 
     init(name: String) {
+		print("init Project")
         self.id = UUID()
         self.name = name
         self.createdAt = Date()

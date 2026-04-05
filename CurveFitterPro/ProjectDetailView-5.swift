@@ -10,8 +10,7 @@ struct ProjectDetailView: View {
     @State private var importError: String?
     @State private var showImportError = false
     @State private var showCustomModel = false
-    // Lifted here so FitRunView and PlotView share the same result,
-    // bypassing SwiftData's unreliable observation of Data blob properties.
+    /// Lifted here so FitRunView and PlotView share the same result,  bypassing SwiftData's unreliable observation of Data blob properties.
     @State private var fitResult: FitResult? = nil
 
     var body: some View {
@@ -28,8 +27,7 @@ struct ProjectDetailView: View {
 
             Divider()
 
-            // if-based switcher — inactive views are destroyed, saving memory.
-            // Keyboard avoidance works correctly unlike .page TabView.
+            /// if-based switcher — inactive views are destroyed, saving memory. Keyboard avoidance works correctly unlike .page TabView.
             Group {
                 if selectedTab == 0 {
                     DataEditorView(project: project, showImport: $showImport)
@@ -46,10 +44,10 @@ struct ProjectDetailView: View {
         }
         .navigationTitle(project.name)
         .navigationBarTitleDisplayMode(.inline)
-		.onAppear {
-			// Restore persisted result on load
-			fitResult = project.fitResult
-		}
+        .onAppear {
+            /// Always restore from project — ensures switching projects doesn't carry over the previous project's fit result
+            fitResult = project.fitResult
+        }
         .sheet(isPresented: $showModelPicker) {
             ModelPickerSheet { model in
                 applyModel(model)
