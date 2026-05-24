@@ -7,13 +7,16 @@
 
 import SwiftUI
 import SwiftData
+import Utilities
+
 @main
 struct CurveFitterProApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+				.modalOverlayRoot()
 				.modelContainer(for: [Project.self, UserModel.self])
-				.keyboardObserver()
+				//.keyboardObserver()
         }
     }
 }

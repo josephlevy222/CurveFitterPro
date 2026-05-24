@@ -3,7 +3,7 @@ import SwiftData
 
 // MARK: - Data Point
 
-struct DataPoint: Identifiable {
+struct DataPoint: Identifiable, Equatable {
     var id = UUID()
     var x: Double
     var y: Double

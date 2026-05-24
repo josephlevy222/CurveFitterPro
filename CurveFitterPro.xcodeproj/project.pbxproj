@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		378762FD2F4E45BE004695BA /* XYPlot in Frameworks */ = {isa = PBXBuildFile; productRef = 378762FC2F4E45BE004695BA /* XYPlot */; };
+		375956262F9798560018A08D /* XYPlot in Frameworks */ = {isa = PBXBuildFile; productRef = 375956252F9798560018A08D /* XYPlot */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -56,7 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				378762FD2F4E45BE004695BA /* XYPlot in Frameworks */,
+				375956262F9798560018A08D /* XYPlot in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -117,7 +117,7 @@
 			);
 			name = CurveFitterPro;
 			packageProductDependencies = (
-				378762FC2F4E45BE004695BA /* XYPlot */,
+				375956252F9798560018A08D /* XYPlot */,
 			);
 			productName = CurveFitterPro;
 			productReference = 37FA88482F47852C00235712 /* CurveFitterPro.app */;
@@ -202,7 +202,7 @@
 			mainGroup = 37FA883F2F47852C00235712;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				378762FB2F4E45BE004695BA /* XCRemoteSwiftPackageReference "XYPlot" */,
+				375956242F9798560018A08D /* XCRemoteSwiftPackageReference "XYPlot" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 37FA88492F47852C00235712 /* Products */;
@@ -601,7 +601,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		378762FB2F4E45BE004695BA /* XCRemoteSwiftPackageReference "XYPlot" */ = {
+		375956242F9798560018A08D /* XCRemoteSwiftPackageReference "XYPlot" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/josephlevy222/XYPlot.git";
 			requirement = {
@@ -612,9 +612,9 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		378762FC2F4E45BE004695BA /* XYPlot */ = {
+		375956252F9798560018A08D /* XYPlot */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 378762FB2F4E45BE004695BA /* XCRemoteSwiftPackageReference "XYPlot" */;
+			package = 375956242F9798560018A08D /* XCRemoteSwiftPackageReference "XYPlot" */;
 			productName = XYPlot;
 		};
 /* End XCSwiftPackageProductDependency section */

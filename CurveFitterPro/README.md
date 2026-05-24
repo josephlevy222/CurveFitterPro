@@ -1,6 +1,7 @@
 # Curve Fitter Pro — iOS Source Code
 
-A scientific nonlinear curve fitting app for iOS 17+ built with SwiftUI, SwiftData, and Swift Charts.
+A scientific nonlinear curve fitting app for iOS 17+ built with SwiftUI, SwiftData, Swift Charts and XYPlot.
+Uses NumericTextField with custom keyboards for iPad and iPhone.  
 
 ## Architecture
 

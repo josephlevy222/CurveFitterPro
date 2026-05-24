@@ -7,8 +7,8 @@ import Utilities
 
 struct PlotView: View {
     @Environment(\.colorScheme) private var colorScheme
-	@Environment(\.keyboardVisible) var keyboardVisible
-	@Environment(\.keyboardHeight) var keyboardHeight
+//	@Environment(\.keyboardVisible) var keyboardVisible
+//	@Environment(\.keyboardHeight) var keyboardHeight
 
     @Bindable var project: Project
     @ObservedObject var engine: FittingEngine
@@ -21,32 +21,18 @@ struct PlotView: View {
     // XYPlot data — rebuilt from curvePoints/bandPoints/dataPoints
     @State private var mainPlotHeight: CGFloat = 500
     @State private var pendingScrollAnchor: String? = nil
-    @State private var controlsHeight: CGFloat = 80
+//    @State private var controlsHeight: CGFloat = 80
     @State private var plotData: PlotData = PlotData(settings: PlotSettings(savePoints: false))
     @State private var residualData: PlotData = PlotData(settings: PlotSettings(savePoints: false))
-	//@State private var keyboardShowing = false
 	
     var body: some View {
-        // GeometryReader measures the natural height once (before keyboard).
-        // That value is stored in mainPlotHeight and used to pin the main plot
-        // inside the ScrollView so it never collapses when the keyboard appears.
-        GeometryReader { geo in
-        ScrollViewReader { scrollProxy in
-        ScrollView {
             VStack(alignment: .leading, spacing: 8) {
                 Color.clear.frame(height: 0).id("plotTop")
                 if project.dataPoints.isEmpty {
                     ContentUnavailableView("No Data", systemImage: "chart.xyaxis.line",
                                            description: Text("Import or enter data first."))
 				} else {
-                    let plotH = max(100, geo.size.height - controlsHeight + keyboardHeight)
-                    mainPlot
-                        .frame(height: plotH)
-                        .simultaneousGesture(titleTapGesture(
-                            frameHeight: plotH,
-                            topAnchor: "plotTop",
-                            bottomAnchor: "plotBottom",
-                            scrollProxy: scrollProxy))
+					XYPlot(data: $plotData)
                         .padding(.horizontal)
 					VStack(spacing: 0) {
 						HStack(spacing: 0) {
@@ -72,39 +58,19 @@ struct PlotView: View {
 							
 							if project.showResiduals {
 								Color.clear.frame(height: 0).id("residualTop")
-								residualPlot
+								XYPlot(data: $residualData)
 									.frame(height: 200)
-									.simultaneousGesture(titleTapGesture(
-										frameHeight: 200,
-										topAnchor: "residualTop",
-										bottomAnchor: "residualBottom",
-										scrollProxy: scrollProxy))
 									.padding(.horizontal)
 								Color.clear.frame(height: 0).id("residualBottom")
 							}
 						}
 					}
 					.padding(.vertical)
-					.captureHeight(in: $controlsHeight)
 				}
             }
-            //.padding(.vertical)
-        } // ScrollView
-        .onChange(of: keyboardHeight) { _, height in
-            // Keyboard just appeared — now the ScrollView has overflow from the
-            // padding above. Fire any pending scroll that was recorded in the gesture.
-            guard height > 0, let anchor = pendingScrollAnchor else { return }
-            let unitAnchor: UnitPoint = anchor.contains("Top") ? .top : .bottom
-            withAnimation { scrollProxy.scrollTo(anchor, anchor: unitAnchor) }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                withAnimation { scrollProxy.scrollTo(anchor, anchor: unitAnchor) }
-                pendingScrollAnchor = nil
-            }
-        }
-        //.scrollDismissesKeyboard(.interactively)
-        } // ScrollViewReader
-
-        } // GeometryReader
+			.padding(.horizontal)
+			.scrollsWithKeyboard()
+			
         .onChange(of: fitResult?.residualSumOfSquares) { _, _ in recomputePlotData() }
         .onChange(of: project.confidenceLevel) { _, _ in recomputePlotData() }
         .onChange(of: project.showConfidenceBand) { _, newValue in
@@ -412,45 +378,32 @@ struct PlotView: View {
         residualData = newResidual
     }
 
-    /// Returns a gesture that detects taps in the title zones of an XYPlot and scrolls to the appropriate anchor so the title is visible above the keyboard.
-    /// Top 15% = plot title, bottom 15% = x-axis title.
-    private func titleTapGesture(frameHeight: CGFloat,
-                                  topAnchor: String,
-                                  bottomAnchor: String,
-                                  scrollProxy: ScrollViewProxy) -> some Gesture {
-        DragGesture(minimumDistance: 0)
-            .onEnded { value in
-                let fraction = value.location.y / frameHeight
-                guard fraction < 0.15 || fraction > 0.85 else { return }
-                let anchor = fraction < 0.15 ? topAnchor : bottomAnchor
-                let unitAnchor: UnitPoint = fraction < 0.15 ? .top : .bottom
-                if keyboardHeight > 0 {
-                    // Keyboard already up — ScrollView already overflowing, scroll now
-                    withAnimation { scrollProxy.scrollTo(anchor, anchor: unitAnchor) }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        withAnimation { scrollProxy.scrollTo(anchor, anchor: unitAnchor) }
-                    }
-                } else {
-                    /// Keyboard not yet up — record where to scroll and wait for keyboardHeight to update, which triggers onChange below
-                    pendingScrollAnchor = anchor
-                }
-            }
-    }
+//    /// Returns a gesture that detects taps in the title zones of an XYPlot and scrolls to the appropriate anchor so the title is visible above the keyboard.
+//    /// Top 15% = plot title, bottom 15% = x-axis title.
+//    private func titleTapGesture(frameHeight: CGFloat,
+//                                  topAnchor: String,
+//                                  bottomAnchor: String,
+//                                  scrollProxy: ScrollViewProxy) -> some Gesture {
+//        DragGesture(minimumDistance: 0)
+//            .onEnded { value in
+//                let fraction = value.location.y / frameHeight
+//                guard fraction < 0.15 || fraction > 0.85 else { return }
+//                let anchor = fraction < 0.15 ? topAnchor : bottomAnchor
+//                let unitAnchor: UnitPoint = fraction < 0.15 ? .top : .bottom
+//                if keyboardHeight > 0 {
+//                    // Keyboard already up — ScrollView already overflowing, scroll now
+//                    withAnimation { scrollProxy.scrollTo(anchor, anchor: unitAnchor) }
+//                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+//                        withAnimation { scrollProxy.scrollTo(anchor, anchor: unitAnchor) }
+//                    }
+//                } else {
+//                    /// Keyboard not yet up — record where to scroll and wait for keyboardHeight to update, which triggers onChange below
+//                    pendingScrollAnchor = anchor
+//                }
+//            }
+//    }
 
-    // MARK: - Publication-quality main plot (XYPlot)
-
-    private var mainPlot: some View {
-        XYPlot(data: $plotData)
-    }
-	
-	// MARK: - Residuals plot (XYPlot)
-	
-	private var residualPlot: some View {
-		XYPlot(data: $residualData)
-	}
-
-    /// Substitutes fitted values into the mathematical equation template.
-    /// Falls back to substituting into the expression if no equation template stored.
+    /// Substitutes fitted values into the mathematical equation template. Falls back to substituting into the expression if no equation template stored.
     private func fittedEquation(result: FitResult) -> String {
         let params = result.parameters.filter { $0.fittedValue != nil }
         guard !params.isEmpty else { return "" }
