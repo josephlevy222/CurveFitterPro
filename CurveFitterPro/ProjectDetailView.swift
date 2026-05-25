@@ -91,7 +91,7 @@ struct ProjectDetailView: View {
     private func handleImport(text: String) {
         do {
             let points = try DataImporter.parse(text: text)
-            project.dataPoints = points
+			project.dataPoints.wrappedValue = points
             project.fitResult = nil
             fitResult = nil
         } catch {

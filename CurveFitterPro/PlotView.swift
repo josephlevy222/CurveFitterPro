@@ -114,7 +114,7 @@ struct PlotView: View {
 
         // Capture all values needed off-main-actor before entering Task
         let dataPoints    = project.dataPoints
-        let finiteXs      = dataPoints.map(\.x).filter(\.isFinite)
+		let finiteXs      = dataPoints.wrappedValue.map(\.x).filter(\.isFinite)
         let xMin          = finiteXs.min() ?? 0
         let xMax          = finiteXs.max() ?? 1
         let expression    = project.modelExpression
@@ -168,7 +168,7 @@ struct PlotView: View {
 
     /// Builds XYPlot PlotData from computed curve, band, and raw data points.  Called whenever curvePoints or bandPoints are updated.
     private func buildPlotData() {
-        let dataPoints = project.dataPoints.filter { $0.x.isFinite && $0.y.isFinite }
+		let dataPoints = project.dataPoints.wrappedValue.filter { $0.x.isFinite && $0.y.isFinite }
         let inliers  = dataPoints.filter { !$0.isOutlier }
         let outliers = dataPoints.filter(  \.isOutlier )
 

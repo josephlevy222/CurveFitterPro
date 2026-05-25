@@ -234,40 +234,41 @@ private var _dpCache:    (id: UUID, key: Data, value: [DataPoint])?    = nil
 private var _paramCache: (id: UUID, key: Data, value: [FitParameter])? = nil
 
 // MARK: - Project convenience accessors
-
+import SwiftUI
 extension Project {
 
     // MARK: DataPoints
 
-    var dataPoints: [DataPoint] {
-        get {
-            // Use cached decode if the underlying blob hasn't changed
-            if let c = _dpCache, c.id == id, c.key == dpXData { return c.value }
-            let xs  = dataToDoubles(dpXData)
-            let ys  = dataToDoubles(dpYData)
-            let ws  = dataToDoubles(dpWeightData)
-            let os  = dataToBools(dpIsOutlierData)
-            guard !xs.isEmpty else { _dpCache = (id, dpXData, []); return [] }
-            let points = xs.indices.map { i in
-                DataPoint(
-                    x:         xs[i],
-                    y:         i < ys.count ? ys[i] : 0,
-                    weight:    i < ws.count ? ws[i] : 1.0,
-                    isOutlier: i < os.count ? os[i] : false
-                )
-            }
-            _dpCache = (id, dpXData, points)
-            return points
-        }
-        set {
-            _dpCache        = nil   // invalidate cache
-            dpXData         = doublesToData(newValue.map(\.x))
-            dpYData         = doublesToData(newValue.map(\.y))
-            dpWeightData    = doublesToData(newValue.map(\.weight))
-            dpIsOutlierData = boolsToData(newValue.map(\.isOutlier))
-            modifiedAt = Date()
-        }
-    }
+	var dataPoints: Binding<[DataPoint]> { Binding(
+		get: { [self] in
+			// Use cached decode if the underlying blob hasn't changed
+			if let c = _dpCache, c.id == id, c.key == dpXData { return c.value }
+			let xs  = dataToDoubles(dpXData)
+			let ys  = dataToDoubles(dpYData)
+			let ws  = dataToDoubles(dpWeightData)
+			let os  = dataToBools(dpIsOutlierData)
+			guard !xs.isEmpty else { _dpCache = (id, dpXData, []); return [] }
+			let points = xs.indices.map { i in
+				DataPoint(
+					x:         xs[i],
+					y:         i < ys.count ? ys[i] : 0,
+					weight:    i < ws.count ? ws[i] : 1.0,
+					isOutlier: i < os.count ? os[i] : false
+				)
+			}
+			_dpCache = (id, dpXData, points)
+			return points
+		},
+		set: { [self] newValue in
+			_dpCache        = nil   // invalidate cache
+			dpXData         = doublesToData(newValue.map(\.x))
+			dpYData         = doublesToData(newValue.map(\.y))
+			dpWeightData    = doublesToData(newValue.map(\.weight))
+			dpIsOutlierData = boolsToData(newValue.map(\.isOutlier))
+			modifiedAt = Date()
+		})
+	}
+
 
     // MARK: Parameters
 
