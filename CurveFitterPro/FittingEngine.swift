@@ -117,7 +117,7 @@ final class FittingEngine: ObservableObject {
 
     func fit(project: Project) async -> FitResult? {
         // ── Gather all data on the main actor before leaving it ──────────
-		let dataPoints = project.dataPoints.wrappedValue.filter { !$0.isOutlier }
+		let dataPoints = project.dataPoints.filter { !$0.isOutlier }
 		guard dataPoints.count >= 2 else {
             statusMessage = "Need at least 2 data points"
             return nil

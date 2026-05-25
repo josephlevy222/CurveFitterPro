@@ -16,7 +16,6 @@ struct CurveFitterProApp: App {
             ContentView()
 				.modalOverlayRoot()
 				.modelContainer(for: [Project.self, UserModel.self])
-				//.keyboardObserver()
         }
     }
 }

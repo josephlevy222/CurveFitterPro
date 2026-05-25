@@ -127,7 +127,7 @@ struct FitRunView: View {
 
                 Section("Residuals") {
                     Chart {
-						ForEach(Array(zip(project.dataPoints.wrappedValue, result.residuals).enumerated()), id: \.offset) { _, pair in
+						ForEach(Array(zip(project.dataPoints, result.residuals).enumerated()), id: \.offset) { _, pair in
                             PointMark(x: .value("X", pair.0.x),
                                       y: .value("Residual", pair.1))
                             .foregroundStyle(.indigo)

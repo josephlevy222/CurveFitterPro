@@ -47,51 +47,38 @@ struct DataEditorView: View {
 			.background(Color(.secondarySystemGroupedBackground))
 			
 			// MARK: - Data List
-			ScrollView { LazyVStack(spacing: 0) { // spacing: 0 keeps your tight Excel look
-				ForEach(project.dataPoints) { $point in
+			List {
+				ForEach($project.dataPoints) { $point in
 					DataPointRow(
 						point: $point,
 						focusedField: $focusedField,
-//						onUpdate: { updatedPoint in
-//							updatePoint(updatedPoint)
-//						},
 						onCommit: { col in
 							advanceFocus(from: point, col: col)
 						},
 						onDelete: {
-							project.dataPoints.wrappedValue.removeAll(where: { $0.id == point.id })
+							project.dataPoints.removeAll(where: { $0.id == point.id })
 						}
 					)
-//					.listRowInsets(EdgeInsets())
-//					.listRowSeparator(.hidden)
+					.listRowInsets(EdgeInsets())
+					.listRowSeparator(.hidden)
 				}
 				
 				// Always-present row for new data
 				NewDataPointRow(focusedField: $focusedField) { newPoint in
-					project.dataPoints.wrappedValue.append(newPoint)
+					project.dataPoints.append(newPoint)
 					if autoSort { sortData() }
 					focusedField = .newRow(column: .x)
 				}
 				.listRowInsets(EdgeInsets())
 				.listRowSeparator(.hidden)
-			}}
-//			.listStyle(.plain) // Cleaner "Excel" look than insetGrouped
-			// Prevent the List's UIScrollView from dismissing the keyboard when the user
-			// taps another row. Without this, UIKit fires the scroll view tap recogniser
-			// first, forcing the active text field to resign before SwiftUI can route
-			// focus to the new cell — causing the keyboard to flash or hide entirely.
+			}//}
+			.listStyle(.plain) // Cleaner "Excel" look than insetGrouped
 			.scrollDismissesKeyboard(.never)
 		}
 		
 	}
 	
 	// MARK: - Logic
-	
-	private func updatePoint(_ updatedPoint: DataPoint) {
-		if let index = project.dataPoints.wrappedValue.firstIndex(where: { $0.id == updatedPoint.id }) {
-			project.dataPoints.wrappedValue[index] = updatedPoint
-		}
-	}
 	
 	private func advanceFocus(from point: DataPoint, col: Field.Column) {
 		switch col {
@@ -110,7 +97,7 @@ struct DataEditorView: View {
 	
 	private func sortData() {
 		withAnimation {
-			project.dataPoints.wrappedValue.sort { $0.x < $1.x }
+			project.dataPoints.sort { $0.x < $1.x }
 		}
 	}
 	
@@ -124,7 +111,7 @@ struct DataEditorView: View {
 		
 		guard let text = clipboardText else { return }
 		if let points = try? DataImporter.parse(text: text) {
-			project.dataPoints.wrappedValue.append(contentsOf: points)
+			project.dataPoints.append(contentsOf: points)
 			if autoSort { sortData() }
 		}
 	}
@@ -132,12 +119,9 @@ struct DataEditorView: View {
 
 // MARK: - Row with Local String Buffer
 
-
 struct DataPointRow: View {
-	@Binding var point: DataPoint  // <-- The fix
+	@Binding var point: DataPoint
 	@FocusState.Binding var focusedField: DataEditorView.Field?
-	
-	// Notice we completely removed 'var onUpdate'
 	var onCommit: (DataEditorView.Field.Column) -> Void
 	var onDelete: () -> Void
 	
@@ -155,7 +139,6 @@ struct DataPointRow: View {
 			cell(text: $pStr.y, col: .y)
 			cell(text: $pStr.w, col: .w, width: 70)
 			
-			// Because 'point' is a binding, we don't need the messy get/set wrapper anymore
 			Toggle("", isOn: $point.isOutlier)
 				.labelsHidden()
 				.frame(width: 40)
@@ -167,9 +150,9 @@ struct DataPointRow: View {
 		}
 		.padding(.horizontal)
 		.frame(height: 34)
-		.background(isFocused ? Color.accentColor.opacity(0.1) : Color.clear)
+		.listRowBackground(isFocused ? Color.accentColor.opacity(0.1) : Color.clear)
 		.onAppear { syncFromModel() }
-		// This will now actually run when you paste data or auto-sort!
+		// This will run when you paste data or auto-sort!
 		.onChange(of: point) { syncFromModel() }
 	}
 	
@@ -180,24 +163,18 @@ struct DataPointRow: View {
 	
 	private func cell(text: Binding<String>, col: DataEditorView.Field.Column, width: CGFloat? = nil) -> some View {
 		NumericTextField("", numericText: text,
-						 onEditingChanged: { editing in
-			if !editing {
-				// No more Task {@MainActor} needed. We can commit safely.
-				commitChanges()
-			}
-		},
+						 onEditingChanged: { editing in if !editing { commitChanges() } },
 						 onCommit: {
-			commitChanges()
-			if pStr.x.isEmpty && pStr.y.isEmpty {
-				focusedField = nil
-			} else {
-				onCommit(col)
-			}
-		})
+							commitChanges()
+							if pStr.x.isEmpty && pStr.y.isEmpty {
+								focusedField = nil
+								} else {
+									onCommit(col)
+								}
+							})
 		.focused($focusedField, equals: .row(id: point.id, column: col))
 		.textFieldStyle(.plain)
 		.monospaced()
-		//.padding(4)
 		.background(focusedField == .row(id: point.id, column: col) ? Color(uiColor: .systemBackground) : Color.clear)
 		.padding(8)
 		.frame(maxWidth: width ?? .infinity)
