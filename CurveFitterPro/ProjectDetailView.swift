@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import XYPlot
 
 struct ProjectDetailView: View {
     @Bindable var project: Project
@@ -12,10 +13,12 @@ struct ProjectDetailView: View {
     @State private var showCustomModel = false
     /// Lifted here so FitRunView and PlotView share the same result,  bypassing SwiftData's unreliable observation of Data blob properties.
     @State private var fitResult: FitResult? = nil
-
+	@State private var plotData: PlotData = PlotData(settings: PlotSettings(savePoints: false))
+	@State private var residualData: PlotData = PlotData(settings: PlotSettings(savePoints: false))
+	
     var body: some View {
-        VStack(spacing: 0) {
-            Picker("Section", selection: $selectedTab) {
+		VStack(spacing: 0) {
+			Picker("Section", selection: $selectedTab) {
                 Text("Data").tag(0)
                 Text("Model").tag(1)
                 Text("Fit").tag(2)
@@ -24,7 +27,7 @@ struct ProjectDetailView: View {
             .pickerStyle(.segmented)
             .padding(.horizontal)
             .padding(.vertical, 8)
-
+			
             Divider()
 
             /// if-based switcher — inactive views are destroyed, saving memory. Keyboard avoidance works correctly unlike .page TabView.
@@ -37,13 +40,22 @@ struct ProjectDetailView: View {
                                    showCustomModel: $showCustomModel)
                 } else if selectedTab == 2 {
                     FitRunView(project: project, engine: engine, fitResult: $fitResult)
-                } else {
-                    PlotView(project: project, engine: engine, fitResult: $fitResult)
-                }
+				} else /*if selectedTab == 3*/ {
+					PlotView(project: project, engine: engine, fitResult: $fitResult,
+										 plotData: $plotData, residualData: $residualData)
+				}
             }
         }
+		
         .navigationTitle(project.name)
         .navigationBarTitleDisplayMode(.inline)
+		.toolbar {
+			ToolbarItem(placement: .automatic) {  //.topBarTrailing) {
+				ExportMenu(provider: PlotExportLayout( plotData: plotData, residualData: residualData,
+													   fitResults: fitResult != nil && project.showResiduals))
+					.padding(.horizontal)
+			}
+		}
         .onAppear {
             /// Always restore from project — ensures switching projects doesn't carry over the previous project's fit result
             fitResult = project.fitResult

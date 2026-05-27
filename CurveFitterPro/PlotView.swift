@@ -6,34 +6,48 @@ import NumericTextField
 import Utilities
 
 struct PlotView: View {
-    @Environment(\.colorScheme) private var colorScheme
-
-    @Bindable var project: Project
-    @ObservedObject var engine: FittingEngine
-    @Binding var fitResult: FitResult?
-    // Cached computed data — only rebuilt when fitResult or confidenceLevel changes
-    @State private var curvePoints: [(x: Double, y: Double)] = []
-    @State private var bandPoints:  [(x: Double, lower: Double, upper: Double)] = []
-    @State private var computeTask: Task<Void, Never>? = nil
-    // Annotation box corner — cycles on tap
-    // XYPlot data — rebuilt from curvePoints/bandPoints/dataPoints
-    @State private var mainPlotHeight: CGFloat = 500
-    @State private var pendingScrollAnchor: String? = nil
-    @State private var plotData: PlotData = PlotData(settings: PlotSettings(savePoints: false))
-    @State private var residualData: PlotData = PlotData(settings: PlotSettings(savePoints: false))
+	@Environment(\.colorScheme) private var colorScheme
 	
-    var body: some View {
-            VStack(alignment: .leading, spacing: 8) {
-                Color.clear.frame(height: 0).id("plotTop")
-                if project.dataPoints.isEmpty {
-                    ContentUnavailableView("No Data", systemImage: "chart.xyaxis.line",
-                                           description: Text("Import or enter data first."))
-				} else {
-					XYPlot(data: $plotData)
-                        .padding(.horizontal)
-					VStack(spacing: 0) {
-						HStack(spacing: 0) {
-							Text("Show")
+	@Bindable var project: Project
+	@ObservedObject var engine: FittingEngine
+	@Binding var fitResult: FitResult?
+	// Cached computed data — only rebuilt when fitResult or confidenceLevel changes
+	@State private var curvePoints: [(x: Double, y: Double)] = []
+	@State private var bandPoints:  [(x: Double, lower: Double, upper: Double)] = []
+	@State private var computeTask: Task<Void, Never>? = nil
+	// Annotation box corner — cycles on tap
+	// XYPlot data — rebuilt from curvePoints/bandPoints/dataPoints
+	@State private var mainPlotHeight: CGFloat = 500
+	@State private var pendingScrollAnchor: String? = nil
+//	@State private var plotData: PlotData = PlotData(settings: PlotSettings(savePoints: false))
+//	@State private var residualData: PlotData = PlotData(settings: PlotSettings(savePoints: false))
+	@Binding var plotData: PlotData
+	@Binding var residualData: PlotData
+	
+	// And update the init to provide defaults for convenience:
+	init(project: Project, engine: FittingEngine, fitResult: Binding<FitResult?>,
+		 plotData: Binding<PlotData> = .constant(PlotData(settings: PlotSettings(savePoints: false))),
+		 residualData: Binding<PlotData> = .constant(PlotData(settings: PlotSettings(savePoints: false)))) {
+		self.project = project
+		self.engine = engine
+		self._fitResult = fitResult
+		self._plotData = plotData
+		self._residualData = residualData
+	}
+	
+	var body: some View {
+		VStack(alignment: .leading, spacing: 8) {
+			Color.clear.frame(height: 0).id("plotTop")
+			if project.dataPoints.isEmpty {
+				ContentUnavailableView("No Data", systemImage: "chart.xyaxis.line",
+									   description: Text("Import or enter data first."))
+			} else {
+				XYPlot(data: $plotData)
+					.padding(.horizontal)
+				VStack(spacing: 0) {
+					HStack(spacing: 0) {
+						Text(project.showConfidenceBand ? "Show" : "Not Showing")
+						if project.showConfidenceBand {
 							Picker("", selection: Binding(
 								get: { project.confidenceLevel },
 								set: { project.confidenceLevel = $0 }
@@ -42,62 +56,60 @@ struct PlotView: View {
 								Text("95%").tag(95)
 								Text("99%").tag(99)
 							}
-							Toggle("Confidence Band", isOn: Binding(get: { project.showConfidenceBand },
-																	set: { project.showConfidenceBand = $0 }))
-						}
+						} else { Text(" ").padding(.bottom)}
+						Toggle("Confidence Band", isOn: Binding(get: { project.showConfidenceBand },
+																set: { project.showConfidenceBand = $0 }))
+					}
+					.padding(.horizontal)
+					
+					Color.clear.frame(height: 0).id("plotBottom")
+					if fitResult != nil {
+						Toggle("Show Residuals", isOn: Binding(get: { project.showResiduals },
+															   set: { project.showResiduals = $0 }))
 						.padding(.horizontal)
 						
-						Color.clear.frame(height: 0).id("plotBottom")
-						if fitResult != nil {
-							Toggle("Show Residuals", isOn: Binding(get: { project.showResiduals },
-																   set: { project.showResiduals = $0 }))
+						if project.showResiduals {
+							XYPlot(data: $residualData)
+								.frame(height: 200)
 								.padding(.horizontal)
-							
-							if project.showResiduals {
-								Color.clear.frame(height: 0).id("residualTop")
-								XYPlot(data: $residualData)
-									.frame(height: 200)
-									.padding(.horizontal)
-								Color.clear.frame(height: 0).id("residualBottom")
-							}
 						}
 					}
-					.padding(.vertical)
 				}
-            }
-			.padding(.horizontal)
-			.scrollsWithKeyboard()
-			
-        .onChange(of: fitResult?.residualSumOfSquares) { _, _ in recomputePlotData() }
-        .onChange(of: project.confidenceLevel) { _, _ in recomputePlotData() }
-        .onChange(of: project.showConfidenceBand) { _, newValue in
-            if newValue { recomputePlotData() } else { buildPlotData() }
-        }
-        .onChange(of: plotData.plotLines.count > 1 ? plotData.plotLines[1].lineColor.sARGB : 0) { _, _ in
-            // Band legend line color changed via PlotLineDialog — sync fill color
-            guard plotData.plotLines.count > 1 && !bandPoints.isEmpty else { return }
-            let newFill = plotData.plotLines[1].lineColor.opacity(colorScheme == .dark ? 0.35 : 0.15)
-            plotData.plotBands = [PlotBand(
-                upper: bandPoints.map { PlotPoint($0.x, $0.upper) },
-                lower: bandPoints.map { PlotPoint($0.x, $0.lower) },
-                color: newFill
-            )]
-        }
-        .onDisappear { computeTask?.cancel(); computeTask = nil }
-        .onAppear {
-            // Cancel any in-flight task from previous project
-            computeTask?.cancel()
-            computeTask = nil
-            // Clear stale data from previous project before recomputing
-            curvePoints = []
-            bandPoints  = []
-            plotData    = PlotData(settings: PlotSettings(savePoints: false))
-            residualData = PlotData(settings: PlotSettings(savePoints: false))
-            recomputePlotData()
-        }
-    }
-
-
+				.padding(.vertical)
+			}
+		}
+		.padding(.horizontal)
+		.scrollsWithKeyboard()
+		
+		.onChange(of: fitResult?.residualSumOfSquares) { _, _ in recomputePlotData() }
+		.onChange(of: project.confidenceLevel) { _, _ in recomputePlotData() }
+		.onChange(of: project.showConfidenceBand) { _, newValue in
+			if newValue { recomputePlotData() } else { buildPlotData() }
+		}
+		.onChange(of: plotData.plotLines.count > 1 ? plotData.plotLines[1].lineColor.sARGB : 0) { _, _ in
+			// Band legend line color changed via PlotLineDialog — sync fill color
+			guard plotData.plotLines.count > 1 && !bandPoints.isEmpty else { return }
+			let newFill = plotData.plotLines[1].lineColor.opacity(colorScheme == .dark ? 0.35 : 0.15)
+			plotData.plotBands = [PlotBand(
+				upper: bandPoints.map { PlotPoint($0.x, $0.upper) },
+				lower: bandPoints.map { PlotPoint($0.x, $0.lower) },
+				color: newFill
+			)]
+		}
+		.onDisappear { computeTask?.cancel(); computeTask = nil }
+		.onAppear {
+			// Cancel any in-flight task from previous project
+			computeTask?.cancel()
+			computeTask = nil
+			// Clear stale data from previous project before recomputing
+			curvePoints = []
+			bandPoints  = []
+			plotData    = PlotData(settings: PlotSettings(savePoints: false))
+			residualData = PlotData(settings: PlotSettings(savePoints: false))
+			recomputePlotData()
+		}
+	}
+	
     // Recompute curve and band whenever the fit result changes.  Parameters are taken directly from
 	// result.parameters in order — never via a Dictionary — so name/value correspondence is always correct.
     private func recomputePlotData() {
@@ -270,7 +282,8 @@ struct PlotView: View {
             let r2    = String(format: "R² = %.4f", result.rSquared)
             let model = project.modelName.isEmpty ? "" : project.modelName + "\n"
             let eq    = fittedEquation(result: result)
-            return model + r2 + (eq.isEmpty ? "" : "\n" + eq)
+			return model + r2 + (eq.isEmpty ? "" : "\n" + eq +
+								 (project.showConfidenceBand ? "\n\(project.confidenceLevel)%" : ""))
         }()
 
         if plotData.plotName == plotKey {
@@ -375,31 +388,6 @@ struct PlotView: View {
         residualData = newResidual
     }
 
-//    /// Returns a gesture that detects taps in the title zones of an XYPlot and scrolls to the appropriate anchor so the title is visible above the keyboard.
-//    /// Top 15% = plot title, bottom 15% = x-axis title.
-//    private func titleTapGesture(frameHeight: CGFloat,
-//                                  topAnchor: String,
-//                                  bottomAnchor: String,
-//                                  scrollProxy: ScrollViewProxy) -> some Gesture {
-//        DragGesture(minimumDistance: 0)
-//            .onEnded { value in
-//                let fraction = value.location.y / frameHeight
-//                guard fraction < 0.15 || fraction > 0.85 else { return }
-//                let anchor = fraction < 0.15 ? topAnchor : bottomAnchor
-//                let unitAnchor: UnitPoint = fraction < 0.15 ? .top : .bottom
-//                if keyboardHeight > 0 {
-//                    // Keyboard already up — ScrollView already overflowing, scroll now
-//                    withAnimation { scrollProxy.scrollTo(anchor, anchor: unitAnchor) }
-//                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-//                        withAnimation { scrollProxy.scrollTo(anchor, anchor: unitAnchor) }
-//                    }
-//                } else {
-//                    /// Keyboard not yet up — record where to scroll and wait for keyboardHeight to update, which triggers onChange below
-//                    pendingScrollAnchor = anchor
-//                }
-//            }
-//    }
-
     /// Substitutes fitted values into the mathematical equation template. Falls back to substituting into the expression if no equation template stored.
     private func fittedEquation(result: FitResult) -> String {
         let params = result.parameters.filter { $0.fittedValue != nil }
@@ -442,7 +430,7 @@ struct PlotView: View {
         eq = eq.replacingOccurrences(of: "exp(",        with: "e^(")
         eq = eq.replacingOccurrences(of: "log(",        with: "ln(")
         eq = eq.replacingOccurrences(of: "sqrt(",       with: "√(")
-
+		eq = eq.replacingOccurrences(of: " + -",        with: " - ")
         return eq
     }
 
