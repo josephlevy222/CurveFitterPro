@@ -78,14 +78,14 @@ struct LMSolver {
 
         // Helper: compute residuals (weighted)
         func residuals(_ params: [Double]) -> [Double] {
-            let pd = paramDict(params)
+            let pd = /*paramDict*/(params)
             return (0..<nData).map { i in
-                do {
-                    let yhat = try expression.evaluate(x: dataX[i], parameters: pd)
+//                do {
+                    let yhat =/* try*/ expression.evaluateFast(x: dataX[i], parameters: pd)
                     return w[i] * (dataY[i] - yhat)
-                } catch {
-                    return 0.0   // treat as zero residual so RSS doesn't go NaN
-                }
+//                } catch {
+//                    return 0.0   // treat as zero residual so RSS doesn't go NaN
+//                }
             }
         }
 

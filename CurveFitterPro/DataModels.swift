@@ -65,8 +65,8 @@ struct FitResult: Sendable {
 
 // MARK: - Built-in Model
 
-struct BuiltinModel: Identifiable {
-	var id = UUID()
+struct BuiltinModel: Identifiable, Codable {
+	var id : String { name }
 	var name: String
 	var category: String
 	var equation: String

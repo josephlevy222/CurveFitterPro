@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		375956262F9798560018A08D /* XYPlot in Frameworks */ = {isa = PBXBuildFile; productRef = 375956252F9798560018A08D /* XYPlot */; };
+		37EC3D0C2FC9F3C200D6D94B /* newModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37EC3D0B2FC9F3C200D6D94B /* newModel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -28,6 +29,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		37EC3D0B2FC9F3C200D6D94B /* newModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = newModel.swift; sourceTree = "<group>"; };
 		37FA88482F47852C00235712 /* CurveFitterPro.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CurveFitterPro.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		37FA88552F47853200235712 /* CurveFitterProTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CurveFitterProTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		37FA885F2F47853200235712 /* CurveFitterProUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CurveFitterProUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -84,6 +86,7 @@
 				37FA88582F47853200235712 /* CurveFitterProTests */,
 				37FA88622F47853200235712 /* CurveFitterProUITests */,
 				37FA88492F47852C00235712 /* Products */,
+				37EC3D0B2FC9F3C200D6D94B /* newModel.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -245,6 +248,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				37EC3D0C2FC9F3C200D6D94B /* newModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

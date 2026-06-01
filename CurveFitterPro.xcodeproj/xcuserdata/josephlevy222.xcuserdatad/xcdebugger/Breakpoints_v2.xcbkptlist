@@ -7,64 +7,32 @@
       <BreakpointProxy
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
-            uuid = "BB211B37-18CB-4C1E-B3A8-C70326C7E215"
-            shouldBeEnabled = "No"
+            uuid = "9CC86AE3-327F-4871-956B-6540CAF29B27"
+            shouldBeEnabled = "Yes"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
-            filePath = "CurveFitterPro/PlotView.swift"
+            filePath = "CurveFitterPro/ModelLibraryViews.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "139"
-            endingLineNumber = "139"
-            landmarkName = "recomputePlotData()"
+            startingLineNumber = "244"
+            endingLineNumber = "244"
+            landmarkName = "saveAndForwardModel()"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
       <BreakpointProxy
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
-            uuid = "9B97BBBC-48A1-48A0-BCFF-50AE1A3AF25A"
+            uuid = "CAE1D8DE-9BA2-45A9-9775-51676D9488DC"
             shouldBeEnabled = "No"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
-            filePath = "CurveFitterPro/PlotView.swift"
+            filePath = "CurveFitterPro/ModelLibraryViews.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "180"
-            endingLineNumber = "180"
-            landmarkName = "buildPlotData()"
-            landmarkType = "7">
-         </BreakpointContent>
-      </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
-            uuid = "3A0FB1F8-D24C-4299-8198-3329AD014AC0"
-            shouldBeEnabled = "No"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            filePath = "CurveFitterPro/PlotView.swift"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "181"
-            endingLineNumber = "181"
-            landmarkName = "buildPlotData()"
-            landmarkType = "7">
-         </BreakpointContent>
-      </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
-            uuid = "974E777F-2D62-4B82-8290-37D8B9CB7A0C"
-            shouldBeEnabled = "No"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            filePath = "CurveFitterPro/PlotView.swift"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "120"
-            endingLineNumber = "120"
-            landmarkName = "recomputePlotData()"
+            startingLineNumber = "216"
+            endingLineNumber = "216"
+            landmarkName = "parseExpression()"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>

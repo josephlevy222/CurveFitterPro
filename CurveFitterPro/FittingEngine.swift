@@ -58,7 +58,7 @@ struct FitOutput: Sendable {
 // MARK: - Pure compute function (nonisolated, Sendable-safe)
 
 private func runFit(_ input: FitInput) async throws -> FitOutput {
-    let compiled = try CompiledExpression(source: input.expression)
+    let compiled = try CompiledExpression(source: input.expression.replacingOccurrences(of: "\"", with: ""))
 
     let lmResult = LMSolver.solve(
         dataX: input.dataX,
@@ -84,9 +84,13 @@ private func runFit(_ input: FitInput) async throws -> FitOutput {
         fittedParams[i].confidenceIntervalHigh = lmResult.parameters[i] + tCrit * lmResult.standardErrors[i]
     }
 
-    let paramDict = Dictionary(uniqueKeysWithValues: zip(input.paramNames, lmResult.parameters))
+    //let paramDict = Dictionary(uniqueKeysWithValues: zip(input.paramNames, lmResult.parameters))
     let fittedY = input.dataX.map { x in
-        (try? compiled.evaluate(x: x, parameters: paramDict)).flatMap { $0.isFinite ? $0 : nil } ?? .nan
+		let yModel = compiled.evaluateFast(x: x, parameters: lmResult.parameters)
+		guard yModel.isFinite else {
+			return 1e10 // A safe penalty value instead of throwing an exception
+		}
+		return yModel
     }
 
     return FitOutput(
@@ -189,18 +193,18 @@ final class FittingEngine: ObservableObject {
         let eps = 1e-6
 
         return xValues.map { x in
-            let paramDict = Dictionary(uniqueKeysWithValues: zip(paramNames, fittedParams))
-            let yhat = (try? expression.evaluate(x: x, parameters: paramDict)) ?? .nan
+            //let paramDict = Dictionary(uniqueKeysWithValues: zip(paramNames, fittedParams))
+            let yhat = /*(try?*/ expression.evaluateFast(x: x, parameters: fittedParams/*paramDict*/)/*) ?? .nan*/
 
             var grad = Array(repeating: 0.0, count: fittedParams.count)
             for j in 0..<fittedParams.count {
                 let delta = max(eps, abs(fittedParams[j]) * eps)
                 var pPlus  = fittedParams; pPlus[j]  += delta
                 var pMinus = fittedParams; pMinus[j] -= delta
-                let dPlus  = Dictionary(uniqueKeysWithValues: zip(paramNames, pPlus))
-                let dMinus = Dictionary(uniqueKeysWithValues: zip(paramNames, pMinus))
-                let yp = (try? expression.evaluate(x: x, parameters: dPlus))  ?? yhat
-                let ym = (try? expression.evaluate(x: x, parameters: dMinus)) ?? yhat
+//                let dPlus  = Dictionary(uniqueKeysWithValues: zip(paramNames, pPlus))
+//                let dMinus = Dictionary(uniqueKeysWithValues: zip(paramNames, pMinus))
+                let yp = /*(try? */expression.evaluateFast(x: x, parameters: pPlus)/*)  ?? yhat*/
+                let ym = /*(try? */expression.evaluateFast(x: x, parameters: pMinus)/*) ?? yhat*/
                 grad[j] = (yp - ym) / (2.0 * delta)
             }
 
@@ -249,12 +253,12 @@ final class FittingEngine: ObservableObject {
         paramNames: [String],
         expression: CompiledExpression
     ) -> [(x: Double, y: Double)] {
-        let paramDict = Dictionary(uniqueKeysWithValues: zip(paramNames, params))
+        //let paramDict = Dictionary(uniqueKeysWithValues: zip(paramNames, params))
         return (0..<nPoints).compactMap { i in
             let x = xMin + (xMax - xMin) * Double(i) / Double(nPoints - 1)
-            guard let y = try? expression.evaluate(x: x, parameters: paramDict),
-                  y.isFinite else { return nil }
-            return (x, y)
+			let y = /* try? */expression.evaluateFast(x: x, parameters: params)/*,*/
+			guard y.isFinite else { return nil }
+			return (x, y)
         }
     }
 

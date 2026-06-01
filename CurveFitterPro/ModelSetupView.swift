@@ -7,8 +7,11 @@ import Utilities
 struct ModelSetupView: View {
     @Bindable var project: Project
     @Binding var showModelPicker: Bool
+	@Binding var showClonedModel: Bool
     @Binding var showCustomModel: Bool
+	@Binding var isEditingOldModel: Bool
 
+	
     var body: some View {
         List {
             Section("Current Model") {
@@ -21,9 +24,13 @@ struct ModelSetupView: View {
                         .font(.system(.body, design: .monospaced))
                 }
                 HStack {
-                    Button("Choose Built-in…") { showModelPicker = true }
+                    Button("Choose Saved Model…") { showModelPicker = true }
                     Spacer()
-                    Button("Custom…") { showCustomModel = true }
+				
+					Button("Copy Saved Model…") { showClonedModel = true }
+					Spacer()
+                    Button("New Custom…") { showCustomModel = true }
+					Button("Edit Custom Model…") { isEditingOldModel = true }
                 }
                 .buttonStyle(.borderless)
             }

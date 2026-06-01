@@ -126,28 +126,28 @@ struct ExpressionParser {
             return inner
         }
 
-        // Identifier (variable or function)
-        if c.isLetter || c == "_" {
-            let name = parseIdentifier()
-            skipSpaces()
-            if peek() == "(" {
-                advance()
-                var args: [ExprNode] = []
-                skipSpaces()
-                if peek() != ")" {
-                    args.append(try parseExpr())
-                    while peek() == "," {
-                        advance()
-                        args.append(try parseExpr())
-                    }
-                }
-                skipSpaces()
-                guard peek() == ")" else { throw ExprError.parseError("Expected ')' after function args") }
-                advance()
-                return .call(name: name, args: args)
-            }
-            return .variable(name)
-        }
+		// Identifier (variable or function, including backslash-shielded names)
+		if c.isLetter || c == "_" || c == "\\" {
+			let name = try parseIdentifier() // 🎯 Added 'try' and '\\' check
+			skipSpaces()
+			if peek() == "(" {
+				advance()
+				var args: [ExprNode] = []
+				skipSpaces()
+				if peek() != ")" {
+					args.append(try parseExpr())
+					while peek() == "," {
+						advance()
+						args.append(try parseExpr())
+					}
+				}
+				skipSpaces()
+				guard peek() == ")" else { throw ExprError.parseError("Expected ')' after function args") }
+				advance()
+				return .call(name: name, args: args)
+			}
+			return .variable(name)
+		}
 
         throw ExprError.unexpectedChar(c)
     }
@@ -171,13 +171,29 @@ struct ExpressionParser {
         return v
     }
 
-    private mutating func parseIdentifier() -> String {
-        var s = ""
-        while pos < input.count && (input[pos].isLetter || input[pos].isNumber || input[pos] == "_") {
-            s.append(input[pos]); pos += 1
-        }
-        return s
-    }
+	private mutating func parseIdentifier() throws -> String {
+		var s = ""
+		
+		// 🎯 Single Leading Backslash Path
+		if pos < input.count && input[pos] == "\\" {
+			advance() // Skip the leading backslash
+			// Read the identifier until hitting a non-word character (space, +, *, etc.)
+			while pos < input.count && (input[pos].isLetter || input[pos].isNumber || input[pos] == "_") {
+				s.append(input[pos])
+				pos += 1
+			}
+			guard !s.isEmpty else {
+				throw ExprError.parseError("Expected a parameter name after '\\'")
+			}
+			return s // Returns clean name (e.g., "slope")
+		}
+		
+		// Standard unshielded identifier path
+		while pos < input.count && (input[pos].isLetter || input[pos].isNumber || input[pos] == "_") {
+			s.append(input[pos]); pos += 1
+		}
+		return s
+	}
 
     @discardableResult
     private mutating func advance() -> Character {
@@ -197,7 +213,7 @@ struct ExpressionParser {
 
 struct ExpressionEvaluator {
 
-    static func evaluate(_ node: ExprNode, context: [String: Double]) throws -> Double {
+    static func evaluateSlowly(_ node: ExprNode, context: [String: Double]) throws -> Double {
         switch node {
         case .number(let v):
             return v
@@ -210,11 +226,11 @@ struct ExpressionEvaluator {
             return v
 
         case .unaryMinus(let child):
-            return try -evaluate(child, context: context)
+            return try -evaluateSlowly(child, context: context)
 
         case .binary(let op, let left, let right):
-            let l = try evaluate(left, context: context)
-            let r = try evaluate(right, context: context)
+            let l = try evaluateSlowly(left, context: context)
+            let r = try evaluateSlowly(right, context: context)
             switch op {
             case "+": return l + r
             case "-": return l - r
@@ -232,7 +248,7 @@ struct ExpressionEvaluator {
     }
 
     private static func evalFunction(name: String, args: [ExprNode], context: [String: Double]) throws -> Double {
-        func a(_ i: Int) throws -> Double { try evaluate(args[i], context: context) }
+        func a(_ i: Int) throws -> Double { try evaluateSlowly(args[i], context: context) }
         func require(_ n: Int) throws {
             guard args.count == n else { throw ExprError.parseError("\(name)() requires \(n) arg(s)") }
         }
@@ -264,7 +280,7 @@ struct ExpressionEvaluator {
 
 // MARK: - Compiled Expression (cached AST)
 
-struct CompiledExpression: Sendable {
+struct CompiledExpressionSlow: Sendable {
     let source: String
     let ast: ExprNode
     let parameterNames: [String]  // detected non-x variables
@@ -276,14 +292,14 @@ struct CompiledExpression: Sendable {
         // Preserve expression order, deduplicate, exclude known constants
         let excluded: Set<String> = ["x", "pi", "e", "π"]
         var seen = Set<String>()
-        self.parameterNames = CompiledExpression.extractVariables(ast)
+        self.parameterNames = CompiledExpressionSlow.extractVariables(ast)
             .filter { excluded.contains($0) == false && seen.insert($0).inserted }
     }
 
     func evaluate(x: Double, parameters: [String: Double]) throws -> Double {
         var ctx = parameters
         ctx["x"] = x
-        return try ExpressionEvaluator.evaluate(ast, context: ctx)
+        return try ExpressionEvaluator.evaluateSlowly(ast, context: ctx)
     }
 
     private static func extractVariables(_ node: ExprNode) -> [String] {
@@ -295,4 +311,127 @@ struct CompiledExpression: Sendable {
         case .call(_, let args): return args.flatMap { extractVariables($0) }
         }
     }
+}
+
+// MARK: - Optimized Tree Nodes (Using Integer Offsets instead of Strings)
+
+indirect enum IndexedExprNode: Sendable {
+	case number(Double)
+	case xVariable
+	case parameter(index: Int) // 💡 Direct array index access instead of String dictionary
+	case unaryMinus(IndexedExprNode)
+	case binary(op: Character, left: IndexedExprNode, right: IndexedExprNode)
+	case call(name: String, args: [IndexedExprNode])
+}
+
+// MARK: - Fast Evaluator (Zero Dictionaries, Zero String Hashing)
+
+struct FastExpressionEvaluator {
+	static func evaluate(_ node: IndexedExprNode, x: Double, parameters: [Double]) -> Double {
+		switch node {
+		case .number(let v):
+			return v
+			
+		case .xVariable:
+			return x
+			
+		case .parameter(let index):
+			// 💡 Ultra-fast hardware pointer offset access
+			return index < parameters.count ? parameters[index] : 1.0
+			
+		case .unaryMinus(let child):
+			return -evaluate(child, x: x, parameters: parameters)
+			
+		case .binary(let op, let left, let right):
+			let l = evaluate(left, x: x, parameters: parameters)
+			let r = evaluate(right, x: x, parameters: parameters)
+			switch op {
+			case "+": return l + r
+			case "-": return l - r
+			case "*": return l * r
+			case "/": return r == 0 ? 0.0 : l / r // Guard division safely
+			case "^": return pow(l, r)
+			default: return 0.0
+			}
+			
+		case .call(let name, let args):
+			return evalFunction(name: name, args: args, x: x, parameters: parameters)
+		}
+	}
+	
+	private static func evalFunction(name: String, args: [IndexedExprNode], x: Double, parameters: [Double]) -> Double {
+		// Helper to evaluate argument sub-nodes
+		@inline(__always) func a(_ i: Int) -> Double { evaluate(args[i], x: x, parameters: parameters) }
+		
+		switch name {
+		case "exp":   return exp(a(0))
+		case "sin":   return sin(a(0))
+		case "cos":   return cos(a(0))
+		case "pow":   return pow(a(0), a(1))
+		case "log", "ln": return log(a(0))
+		case "sqrt":  return sqrt(a(0))
+		case "abs":   return abs(a(0))
+		default:      return 0.0
+		}
+	}
+}
+
+// MARK: - Upgraded Compiled Expression
+
+struct CompiledExpression: Sendable {
+	let source: String
+	let parameterNames: [String]
+	private let indexedAst: IndexedExprNode // 💡 The pre-mapped performance AST
+	
+	init(source: String) throws {
+		self.source = source
+		var parser = ExpressionParser(source)
+		let rawAst = try parser.parse()
+		
+		// 1. Identify and deduplicate our unique parameter variables
+		let excluded: Set<String> = ["x", "pi", "e", "π"]
+		var seen = Set<String>()
+		let extracted = CompiledExpression.extractVariables(rawAst)
+			.filter { !excluded.contains($0) && seen.insert($0).inserted }
+		self.parameterNames = extracted
+		
+		// 2. Pre-compile the raw string AST into our index-mapped tree once
+		self.indexedAst = CompiledExpression.compileToIndices(rawAst, parameterNames: extracted)
+	}
+	
+	/// 🚀 New High-Performance Loop Evaluator
+	/// Accepts a flat array of values mapped exactly to the order of `parameterNames`
+	func evaluateFast(x: Double, parameters: [Double]) -> Double {
+		return FastExpressionEvaluator.evaluate(indexedAst, x: x, parameters: parameters)
+	}
+	
+	// Transform string variables into structural index types
+	private static func compileToIndices(_ node: ExprNode, parameterNames: [String]) -> IndexedExprNode {
+		switch node {
+		case .number(let v):
+			return .number(v)
+		case .variable(let name):
+			if name == "x" { return .xVariable }
+			if name == "pi" || name == "π" { return .number(Double.pi) }
+			if name == "e" { return .number(M_E) }
+			let index = parameterNames.firstIndex(of: name) ?? 0
+			return .parameter(index: index)
+		case .unaryMinus(let child):
+			return .unaryMinus(compileToIndices(child, parameterNames: parameterNames))
+		case .binary(let op, let l, let r):
+			return .binary(op: op, left: compileToIndices(l, parameterNames: parameterNames), right: compileToIndices(r, parameterNames: parameterNames))
+		case .call(let name, let args):
+			return .call(name: name, args: args.map { compileToIndices($0, parameterNames: parameterNames) })
+		}
+	}
+	
+	private static func extractVariables(_ node: ExprNode) -> [String] {
+		switch node {
+		case .number: return []
+		case .variable(let n): return [n]
+		case .unaryMinus(let child): return extractVariables(child)
+		case .binary(_, let l, let r): return extractVariables(l) + extractVariables(r)
+		case .call(_, let args): return args.flatMap { extractVariables($0) }
+		}
+	}
 }
