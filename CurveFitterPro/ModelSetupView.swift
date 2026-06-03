@@ -33,8 +33,9 @@ struct ModelSetupView: View {
 					Button("Edit Custom Model…") { isEditingOldModel = true }
                 }
                 .buttonStyle(.borderless)
+				
             }
-
+			
             if !project.parameters.isEmpty {
                 Section("Parameters") {
                     ForEach(project.parameters.indices, id: \.self) { i in

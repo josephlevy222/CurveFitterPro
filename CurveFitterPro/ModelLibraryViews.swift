@@ -40,7 +40,7 @@ struct ModelPickerSheet: View {
 								} label: {
 									VStack(alignment: .leading, spacing: 4) {
 										Text(model.name).foregroundStyle(.primary).bold()
-										// 🎯 True baseline-shifted rendering for custom or built-in json records
+										// True baseline-shifted rendering for custom or built-in json records
 										Text(EquationFormatter.formatToAttributedString(model.expression, fontSize: 13))
 										Text(model.typicalUseCase)
 											.font(.caption)
@@ -57,7 +57,27 @@ struct ModelPickerSheet: View {
 						}
 					}
 				}
-			}
+				
+#if DEBUG
+				Section {
+					Button(action: {
+						ModelLibrary.resetToFactoryDefaults()
+						libraryToggle.toggle()
+					}) {
+						HStack {
+							Image(systemName: "trash.triangle.fill")
+							Text("Reset Cache to Factory Defaults")
+						}
+						.font(.caption)
+						.foregroundStyle(.red)
+					}
+					.buttonStyle(.borderedProminent)
+					.tint(.red.opacity(0.1))
+					.padding(.top, 8)
+				}
+#endif
+			} // 🎯 The List ends here
+			// ✅ FIX: Modifiers are now properly attached to the List itself
 			.searchable(text: $searchText, prompt: "Search models…")
 			.navigationTitle("Model Library")
 			.navigationBarTitleDisplayMode(.inline)
