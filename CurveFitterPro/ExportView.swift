@@ -14,19 +14,21 @@ struct ExportPlotView:  View {
 	let residualData: PlotData
 	let fitResults: Bool
 	var body: some View {
-		VStack(alignment: .leading, spacing: 8) {
-			XYPlot(data: .constant(plotData))
-				.padding(.horizontal)
-			
-			if fitResults {
-				XYPlot(data: .constant(residualData))
-					.frame(height: 200)
+		GeometryReader { geo in
+			VStack(alignment: .leading, spacing: 8) {
+				XYPlot(data: .constant(plotData))
 					.padding(.horizontal)
+				
+				if fitResults {
+					XYPlot(data: .constant(residualData))
+						.frame(height: geo.size.height/5.0)
+						.padding(.horizontal)
+				}
 			}
+			.padding()
+			.allowsHitTesting(false) // Not an interactive view, This and below
+			.disabled(true)          // prevent focus state warnings
 		}
-		.padding()
-		.allowsHitTesting(false) // Not an interactive view, This and below
-		.disabled(true)          // prevent focus state warnings
 	}
 }
 

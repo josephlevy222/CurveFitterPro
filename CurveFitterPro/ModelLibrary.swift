@@ -3,81 +3,101 @@ import Foundation
 // MARK: - Model Library
 
 struct ModelLibrary {
-	
-	// 1. Storage URL path in the user's writeable Documents folder
-	private static var fileURL: URL {
-		let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-		return paths[0].appendingPathComponent("models.json")
-	}
-	
-	// 2. Mutable runtime library array loaded at app launch
-	static var all: [BuiltinModel] = loadOrCreateLibrary() {
-		didSet {
-			// 🔄 AUTOMATIC SAVE: Whenever 'all' changes, write it to disk immediately!
-			save(models: all)
-		}
-	}
-	
-	// 3. Document persistence check / factory bootstrap loader
-	private static func loadOrCreateLibrary() -> [BuiltinModel] {
-		// If the writeable JSON file exists in Documents, attempt to load it
-		if FileManager.default.fileExists(atPath: fileURL.path) {
-			do {
-				let data = try Data(contentsOf: fileURL)
-				let decoded = try JSONDecoder().decode([BuiltinModel].self, from: data)
-				print("✅ Successfully loaded \(decoded.count) models from models.json storage.")
-				if !decoded.isEmpty { return decoded }
-			} catch {
-				print("⚠️ Found models.json on disk, but failed to decode it. Error: \(error)")
-				print("Falling back to fresh factory defaults...")
-			}
-		} else {
-			print("ℹ️ First launch: No models.json found in Documents directory. Bootstrapping library...")
-		}
-		
-		// Fallback: Parse from the built-in factory default JSON string literal
-		let defaults = factoryDefaults
-		
-		// Immediately persist to disk so it's ready for custom modifications
-		save(models: defaults)
-		return defaults
-	}
-	
-	// Save mutations back down to local storage atomically
-	static func save(models: [BuiltinModel]) {
-		do {
-			if models.isEmpty { print("❌ Failed to write models is empty.");return }
-			let data = try JSONEncoder().encode(models)
-			try data.write(to: fileURL, options: .atomic)
-			print("💾 Saved \(models.count) models to disk.")
-		} catch {
-			print("❌ Failed to write models to disk: \(error)")
-		}
-	}
-	
-	// 4. JSON Reader with detailed console error catching
-	private static var factoryDefaults: [BuiltinModel] {
-		guard let data = defaultJSON.data(using: .utf8) else {
-			print("❌ Critical Error: Cannot convert defaultJSON string to UTF8 Data.")
-			return []
-		}
-		
-		do {
-			let decoded = try JSONDecoder().decode([BuiltinModel].self, from: data)
-			return decoded
-		} catch {
-			print("❌ JSON Decoding Failed! Check your Xcode console output below for the exact cause:")
-			print("➡️ Detailed DecodingError: \(error)")
-			return []
-		}
-	}
-	// 5. Raw Factory Core Database Map
-	private static let defaultJSON = #"""
+    
+    // 1. Storage URL path in the user's writeable Documents folder
+    private static var fileURL: URL {
+        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        return paths[0].appendingPathComponent("models.json")
+    }
+    
+    // 2. Mutable runtime library array loaded at app launch
+    static var all: [BuiltinModel] = loadOrCreateLibrary() {
+        didSet {
+            // 🔄 AUTOMATIC SAVE: Whenever 'all' changes, write it to disk immediately!
+            save(models: all)
+        }
+    }
+    
+    // 2b. Bump this whenever defaultJSON below changes, so existing installs
+    // pick up the update instead of silently keeping a stale disk cache.
+    private static let factoryDefaultsVersion = 6
+    private static let factoryDefaultsVersionKey = "ModelLibrary.factoryDefaultsVersion"
+    
+    // 3. Document persistence check / factory bootstrap loader
+    private static func loadOrCreateLibrary() -> [BuiltinModel] {
+        let storedVersion = UserDefaults.standard.integer(forKey: factoryDefaultsVersionKey)
+        
+        // If the writeable JSON file exists in Documents, attempt to load it
+        if FileManager.default.fileExists(atPath: fileURL.path) {
+            do {
+                let data = try Data(contentsOf: fileURL)
+                let decoded = try JSONDecoder().decode([BuiltinModel].self, from: data)
+                print("✅ Successfully loaded \(decoded.count) models from models.json storage.")
+                if !decoded.isEmpty {
+                    if storedVersion < factoryDefaultsVersion {
+                        // The builtin definitions changed since this cache was written.
+                        // Refresh the builtins from source, but keep the user's own
+                        // custom models exactly as they were.
+                        print("♻️ Refreshing builtin models to factoryDefaultsVersion \(factoryDefaultsVersion)...")
+                        let custom = decoded.filter { $0.category == "Custom Models" }
+                        let refreshed = factoryDefaults + custom
+                        UserDefaults.standard.set(factoryDefaultsVersion, forKey: factoryDefaultsVersionKey)
+                        save(models: refreshed)
+                        return refreshed
+                    }
+                    return decoded
+                }
+            } catch {
+                print("⚠️ Found models.json on disk, but failed to decode it. Error: \(error)")
+                print("Falling back to fresh factory defaults...")
+            }
+        } else {
+            print("ℹ️ First launch: No models.json found in Documents directory. Bootstrapping library...")
+        }
+        
+        // Fallback: Parse from the built-in factory default JSON string literal
+        let defaults = factoryDefaults
+        
+        // Immediately persist to disk so it's ready for custom modifications
+        UserDefaults.standard.set(factoryDefaultsVersion, forKey: factoryDefaultsVersionKey)
+        save(models: defaults)
+        return defaults
+    }
+    
+    // Save mutations back down to local storage atomically
+    static func save(models: [BuiltinModel]) {
+        do {
+            if models.isEmpty { print("❌ Failed to write models is empty.");return }
+            let data = try JSONEncoder().encode(models)
+            try data.write(to: fileURL, options: .atomic)
+            print("💾 Saved \(models.count) models to disk.")
+        } catch {
+            print("❌ Failed to write models to disk: \(error)")
+        }
+    }
+    
+    // 4. JSON Reader with detailed console error catching
+    private static var factoryDefaults: [BuiltinModel] {
+        guard let data = defaultJSON.data(using: .utf8) else {
+            print("❌ Critical Error: Cannot convert defaultJSON string to UTF8 Data.")
+            return []
+        }
+        
+        do {
+            let decoded = try JSONDecoder().decode([BuiltinModel].self, from: data)
+            return decoded
+        } catch {
+            print("❌ JSON Decoding Failed! Check your Xcode console output below for the exact cause:")
+            print("➡️ Detailed DecodingError: \(error)")
+            return []
+        }
+    }
+    // 5. Raw Factory Core Database Map
+    private static let defaultJSON = #"""
  [
    {
   "name": "Linear",
   "category": "Polynomial & Power",
-  "equation": "y = a·x + b",
   "expression": "a * x + b",
   "parameterNames": ["a", "b"],
   "defaultValues": [1.0, 0.0],
@@ -87,7 +107,6 @@ struct ModelLibrary {
    {
   "name": "Quadratic",
   "category": "Polynomial & Power",
-  "equation": "y = a·x² + b·x + c",
   "expression": "a * x * x + b * x + c",
   "parameterNames": ["a", "b", "c"],
   "defaultValues": [1.0, 0.0, 0.0],
@@ -97,7 +116,6 @@ struct ModelLibrary {
    {
   "name": "Cubic",
   "category": "Polynomial & Power",
-  "equation": "y = a·x³ + b·x² + c·x + d",
   "expression": "a * x * x * x + b * x * x + c * x + d",
   "parameterNames": ["a", "b", "c", "d"],
   "defaultValues": [1.0, 0.0, 0.0, 0.0],
@@ -107,7 +125,6 @@ struct ModelLibrary {
    {
   "name": "Power Law",
   "category": "Polynomial & Power",
-  "equation": "y = a · x^b",
   "expression": "a * pow(x, b)",
   "parameterNames": ["a", "b"],
   "defaultValues": [1.0, 1.0],
@@ -117,7 +134,6 @@ struct ModelLibrary {
    {
   "name": "Logarithmic",
   "category": "Polynomial & Power",
-  "equation": "y = a · ln(x) + b",
   "expression": "a * log(x) + b",
   "parameterNames": ["a", "b"],
   "defaultValues": [1.0, 0.0],
@@ -127,7 +143,6 @@ struct ModelLibrary {
    {
   "name": "Single Exponential Decay",
   "category": "Growth & Decay",
-  "equation": "y = a · e^(−b·x) + c",
   "expression": "a * exp(-b * x) + c",
   "parameterNames": ["a", "b", "c"],
   "defaultValues": [1.0, 0.1, 0.0],
@@ -137,7 +152,6 @@ struct ModelLibrary {
    {
   "name": "Double Exponential Decay",
   "category": "Growth & Decay",
-  "equation": "y = a·e^(−b·x) + c·e^(−d·x)",
   "expression": "a * exp(-b * x) * c * exp(-d * x)",
   "parameterNames": ["a", "b", "c", "d"],
   "defaultValues": [1.0, 0.5, 0.5, 0.05],
@@ -147,7 +161,6 @@ struct ModelLibrary {
    {
   "name": "Exponential Growth",
   "category": "Growth & Decay",
-  "equation": "y = a · e^(b·x)",
   "expression": "a * exp(b * x)",
   "parameterNames": ["a", "b"],
   "defaultValues": [1.0, 0.1],
@@ -157,7 +170,6 @@ struct ModelLibrary {
    {
   "name": "Exponential Plateau",
   "category": "Growth & Decay",
-  "equation": "y = a · (1 − e^(−b·x))",
   "expression": "a * (1 - exp(-b * x))",
   "parameterNames": ["a", "b"],
   "defaultValues": [1.0, 0.1],
@@ -167,19 +179,17 @@ struct ModelLibrary {
    {
   "name": "Four-Parameter Logistic (4PL)",
   "category": "Sigmoidal / Dose-Response",
-  "equation": "y = d + (a−d) / (1 + (x/c)^b)",
   "expression": "d + (a - d) / (1 + pow(x / c, b))",
-  "parameterNames": ["a", "b", "c", "d"],
-  "defaultValues": [0.0, 1.0, 1.0, 1.0],
+  "parameterNames": ["d", "a", "c", "b"],
+  "defaultValues": [1.0, 0.0, 1.0, 1.0],
   "description": "Symmetric sigmoid; a=bottom, d=top, c=EC50, b=HillSlope.",
   "typicalUseCase": "ELISA, drug dose-response, immunoassay calibration"
    },
    {
   "name": "Hill Equation",
   "category": "Sigmoidal / Dose-Response",
-  "equation": "y = Vmax · x^n / (K^n + x^n)",
-  "expression": "Vmax * pow(x, n) / (pow(K, n) + pow(x, n))",
-  "parameterNames": ["Vmax", "K", "n"],
+  "expression": "V.max * pow(x, n) / (pow(K, n) + pow(x, n))",
+  "parameterNames": ["V.max", "n", "K"],
   "defaultValues": [1.0, 1.0, 1.0],
   "description": "Hill equation; n=cooperativity coefficient.",
   "typicalUseCase": "Enzyme cooperativity, receptor binding, oxygen-hemoglobin"
@@ -187,9 +197,8 @@ struct ModelLibrary {
    {
   "name": "Boltzmann Sigmoid",
   "category": "Sigmoidal / Dose-Response",
-  "equation": "y = bottom + (top−bottom) / (1 + exp((V50−x)/slope))",
-  "expression": "\\bottom + (\\top - \\bottom) / (1 + exp((V50 - x) / \\slope))",
-  "parameterNames": ["bottom", "top", "V50", "slope"],
+  "expression": "bottom + (top - bottom) / (1 + exp((V.50 - x) / slope))",
+  "parameterNames": ["bottom", "top", "V.50", "slope"],
   "defaultValues": [0.0, 1.0, 0.0, 1.0],
   "description": "Boltzmann sigmoid, common in electrophysiology.",
   "typicalUseCase": "Ion channel gating, voltage-dependent conductance"
@@ -197,9 +206,8 @@ struct ModelLibrary {
    {
   "name": "Michaelis-Menten",
   "category": "Enzyme Kinetics",
-  "equation": "y = Vmax · x / (Km + x)",
-  "expression": "Vmax * x / (Km + x)",
-  "parameterNames": ["Vmax", "Km"],
+  "expression": "V.max * x / (K.m + x)",
+  "parameterNames": ["V.max", "K.m"],
   "defaultValues": [1.0, 1.0],
   "description": "Classic Michaelis-Menten enzyme kinetics.",
   "typicalUseCase": "Enzyme velocity vs substrate concentration"
@@ -207,9 +215,8 @@ struct ModelLibrary {
    {
   "name": "Substrate Inhibition",
   "category": "Enzyme Kinetics",
-  "equation": "y = Vmax · x / (Km + x·(1 + x/Ki))",
-  "expression": "Vmax * x / (Km + x * (1 + x / Ki))",
-  "parameterNames": ["Vmax", "Km", "Ki"],
+  "expression": "V.max * x / (K.m + x * (1 + x / K.i))",
+  "parameterNames": ["V.max", "K.m", "K.i"],
   "defaultValues": [1.0, 1.0, 10.0],
   "description": "Michaelis-Menten with substrate inhibition at high [S].",
   "typicalUseCase": "Enzymes showing bell-shaped velocity curves"
@@ -217,9 +224,8 @@ struct ModelLibrary {
    {
   "name": "Gaussian Peak",
   "category": "Peak / Spectral",
-  "equation": "y = a · exp(−(x−μ)² / (2σ²))",
-  "expression": "a * exp(-(x - mu) * (x - mu) / (2 * sigma * sigma))",
-  "parameterNames": ["a", "mu", "sigma"],
+  "expression": "a * exp(-(x - μ) * (x - μ) / (2 * σ * σ))",
+  "parameterNames": ["a", "μ", "σ"],
   "defaultValues": [1.0, 0.0, 1.0],
   "description": "Gaussian (normal) peak shape.",
   "typicalUseCase": "Spectroscopy, chromatography, particle size distribution"
@@ -227,29 +233,26 @@ struct ModelLibrary {
    {
   "name": "Lorentzian Peak",
   "category": "Peak / Spectral",
-  "equation": "y = a · (γ²) / ((x−x0)² + γ²)",
-  "expression": "a * (gamma * gamma) / ((x - x0) * (x - x0) + gamma * gamma)",
-  "parameterNames": ["a", "x0", "gamma"],
-  "defaultValues": [1.0, 0.0, 1.0],
+  "expression": "a * (γ * γ) / ((x - x0) * (x - x0) + γ * γ)",
+  "parameterNames": ["a", "γ", "x0"],
+  "defaultValues": [1.0, 1.0, 0.0],
   "description": "Lorentzian (Cauchy) peak — heavier tails than Gaussian.",
   "typicalUseCase": "NMR spectroscopy, resonance line shapes"
    },
    {
   "name": "Asymmetric Gaussian",
   "category": "Peak / Spectral",
-  "equation": "y = a · exp(−(x−μ)² / (2·σ(x)²)), σ varies each side",
-  "expression": "a * exp(-(x - mu)*(x - mu) / (2 * pow(x < mu ? sigma1 : sigma2, 2)))",
-  "parameterNames": ["a", "mu", "sigma1", "sigma2"],
-  "defaultValues": [1.0, 0.0, 1.0, 1.5],
+  "expression": "(x < μ) ? a * exp(-pow((x - μ) / σ.1, 2)/2) : a * exp(-pow((x - μ) / σ.2, 2)/2)",
+  "parameterNames": ["μ", "a", "σ.1", "σ.2"],
+  "defaultValues": [0.0, 1.0, 1.0, 1.5],
   "description": "Gaussian with different widths on each side of the peak.",
   "typicalUseCase": "Asymmetric chromatographic peaks, skewed distributions"
    },
    {
   "name": "One-Compartment IV Bolus",
   "category": "Pharmacokinetics",
-  "equation": "C = C0 · e^(−ke·t)",
-  "expression": "C0 * exp(-ke * x)",
-  "parameterNames": ["C0", "ke"],
+  "expression": "C.0 * exp(-k.e * x)",
+  "parameterNames": ["C.0", "k.e"],
   "defaultValues": [10.0, 0.1],
   "description": "One-compartment PK after IV bolus dose.",
   "typicalUseCase": "Drug plasma concentration vs time after IV injection"
@@ -257,19 +260,17 @@ struct ModelLibrary {
    {
   "name": "One-Compartment Oral",
   "category": "Pharmacokinetics",
-  "equation": "C = (F·D·ka)/(V·(ka−ke)) · (e^(−ke·t) − e^(−ka·t))",
-  "expression": "F * D * ka / (V * (ka - ke)) * (exp(-ke * x) - exp(-ka * x))",
-  "parameterNames": ["F", "D", "ka", "ke", "V"],
-  "defaultValues": [1.0, 100.0, 1.0, 0.1, 10.0],
+  "expression": "F * D * k.a / (V * (k.a - k.e)) * (exp(-k.e * x) - exp(-k.a * x))",
+  "parameterNames": ["F", "D", "k.a", "V", "k.e"],
+  "defaultValues": [1.0, 100.0, 1.0, 10.0, 0.1],
   "description": "One-compartment oral absorption PK model.",
   "typicalUseCase": "Oral drug absorption and elimination"
    },
    {
   "name": "Damped Sine Wave",
   "category": "Oscillation",
-  "equation": "y = a · e^(−b·x) · sin(ω·x + φ)",
-  "expression": "a * exp(-b * x) * sin(omega * x + phi)",
-  "parameterNames": ["a", "b", "omega", "phi"],
+  "expression": "a * exp(-b * x) * sin(ω * x + φ)",
+  "parameterNames": ["a", "b", "ω", "φ"],
   "defaultValues": [1.0, 0.1, 1.0, 0.0],
   "description": "Exponentially damped sinusoidal oscillation.",
   "typicalUseCase": "Mechanical resonance, NMR FID decay, LC circuit"
@@ -277,51 +278,50 @@ struct ModelLibrary {
    {
   "name": "Sine Wave",
   "category": "Oscillation",
-  "equation": "y = a · sin(ω·x + φ) + offset",
-  "expression": "a * sin(omega * x + phi) + \\offset",
-  "parameterNames": ["a", "omega", "phi", "offset"],
+  "expression": "a * sin(ω * x + φ) + offset",
+  "parameterNames": ["a", "ω", "φ", "offset"],
   "defaultValues": [1.0, 1.0, 0.0, 0.0],
   "description": "Simple sinusoidal oscillation with offset.",
   "typicalUseCase": "Periodic signals, circadian rhythm data"
    }
  ]
  """#
-	
-	// MARK: - Search & Category APIs
-	
-	static var categories: [String] {
-		var seen = Set<String>()
-		return all.filter { seen.insert($0.category).inserted }.map(\.category)
-	}
-	
-	static func models(in category: String) -> [BuiltinModel] {
-		all.filter { $0.category == category }
-	}
-	
-	static func search(_ query: String) -> [BuiltinModel] {
-		guard !query.isEmpty else { return all }
-		let q = query.lowercased()
-		return all.filter {
-			$0.name.lowercased().contains(q) ||
-			$0.category.lowercased().contains(q) ||
-			$0.typicalUseCase.lowercased().contains(q) ||
-			$0.description.lowercased().contains(q)
-		}
-	}
-	
+    
+    // MARK: - Search & Category APIs
+    
+    static var categories: [String] {
+        var seen = Set<String>()
+        return all.filter { seen.insert($0.category).inserted }.map(\.category)
+    }
+    
+    static func models(in category: String) -> [BuiltinModel] {
+        all.filter { $0.category == category }
+    }
+    
+    static func search(_ query: String) -> [BuiltinModel] {
+        guard !query.isEmpty else { return all }
+        let q = query.lowercased()
+        return all.filter {
+            $0.name.lowercased().contains(q) ||
+            $0.category.lowercased().contains(q) ||
+            $0.typicalUseCase.lowercased().contains(q) ||
+            $0.description.lowercased().contains(q)
+        }
+    }
+    
 #if DEBUG
-	/// Completely wipes the document storage cache and reloads initial configurations.
-	static func resetToFactoryDefaults() {
-		let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-		let fileURL = paths[0].appendingPathComponent("models.json")
-		
-		// 1. Evict file from disk
-		try? FileManager.default.removeItem(at: fileURL)
-		print("🗑️ Debug: models.json has been removed from disk storage.")
-		
-		// 2. Force the internal array to bootstrap back from factory defaults
-		// Note: Assuming your bundle loader code lives inside your internal bootstrap function
-		self.all = loadOrCreateLibrary()
-	}
+    /// Completely wipes the document storage cache and reloads initial configurations.
+    static func resetToFactoryDefaults() {
+        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        let fileURL = paths[0].appendingPathComponent("models.json")
+        
+        // 1. Evict file from disk
+        try? FileManager.default.removeItem(at: fileURL)
+        print("🗑️ Debug: models.json has been removed from disk storage.")
+        
+        // 2. Force the internal array to bootstrap back from factory defaults
+        // Note: Assuming your bundle loader code lives inside your internal bootstrap function
+        self.all = loadOrCreateLibrary()
+    }
 #endif
 }

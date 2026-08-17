@@ -1,11 +1,12 @@
 import SwiftUI
 import SwiftData
 import XYPlot
+import Utilities
 
 struct ProjectDetailView: View {
 	@Bindable var project: Project
 	@StateObject private var engine = FittingEngine()
-	@State private var selectedTab = 0
+	@State private var selectedTab = 4
 	@State private var showModelPicker = false
 	@State private var showImport = false
 	@State private var importError: String?
@@ -27,6 +28,7 @@ struct ProjectDetailView: View {
 	var body: some View {
 		VStack(spacing: 0) {
 			Picker("Section", selection: $selectedTab) {
+				Text("Workspace").tag(4) // FUTURE: Make only in landscape iPad
 				Text("Data").tag(0)
 				Text("Model").tag(1)
 				Text("Fit").tag(2)
@@ -50,9 +52,14 @@ struct ProjectDetailView: View {
 								   isEditingOldModel: $isEditingOldModel)
 				} else if selectedTab == 2 {
 					FitRunView(project: project, engine: engine, fitResult: $fitResult)
-				} else {
+				} else if selectedTab == 3 {
 					PlotView(project: project, engine: engine, fitResult: $fitResult,
 							 plotData: $plotData, residualData: $residualData)
+					.scrollsWithKeyboard(alwaysAllowScroll: true) // always use at outermost view
+				} else {
+					ProjectWorkspaceView(project: project, engine: engine, fitResult: $fitResult, plotData: $plotData,
+										 residualData: $residualData)
+					.scrollsWithKeyboard(alwaysAllowScroll: true) // always use at outermost view
 				}
 			}
 		}
@@ -87,7 +94,7 @@ struct ProjectDetailView: View {
 				let clonedModel = BuiltinModel(
 					name: "\(model.name) (Copy)",
 					category: "Custom Models",
-					equation: "",
+					//equation: "",
 					expression: model.expression,
 					parameterNames: model.parameterNames,
 					defaultValues: model.defaultValues,
@@ -142,7 +149,7 @@ struct ProjectDetailView: View {
 	private func applyModel(_ model: BuiltinModel) {
 		project.modelName = model.name
 		project.modelExpression = model.expression
-		project.modelEquation = model.equation
+        project.modelEquation = EquationFormatter.formatToPlainString(model.expression)
 		project.parameters = model.makeParameters()
 		project.fitResult = nil
 		fitResult = nil

@@ -13,11 +13,18 @@ struct FitRunView: View {
         List {
             Section {
                 Button {
+                    let maxIterations = 25
+
                     Task {
-                        if let result = await engine.fit(project: project) {
-                            project.fitResult  = result
-                            project.parameters = result.parameters
-                            fitResult = result
+                        for i in 0..<maxIterations { print("Iteration: \(i)")
+                            if let result = await engine.fit(project: project) {
+                                project.fitResult = result
+                                project.parameters = result.parameters
+                                fitResult = result
+                            }
+                            
+                            // Stop retrying if the fit successfully converged
+                            if project.fitResult?.converged == true { break }
                         }
                     }
                 } label: {
@@ -49,7 +56,7 @@ struct FitRunView: View {
                 Section("Goodness of Fit") {
                     LabeledContent("R²",          value: String(format: "%.6f", result.rSquared))
                     LabeledContent("Adjusted R²", value: String(format: "%.6f", result.adjustedRSquared))
-                    LabeledContent("RSS",          value: String(format: "%.4g", result.residualSumOfSquares))
+                    LabeledContent("RSS",         value: String(format: "%.4g", result.residualSumOfSquares))
                     LabeledContent("Reduced χ²",  value: String(format: "%.4g", result.reducedChiSquared))
                     LabeledContent("Iterations",  value: "\(result.iterations)")
                     LabeledContent("Converged",   value: result.converged ? "Yes" : "No")
@@ -61,7 +68,7 @@ struct FitRunView: View {
                         HStack(alignment: .top) {
                             Text(p.name)
                                 .font(.headline)
-                                .frame(width: 40, alignment: .leading)
+                                .frame(width: 80, alignment: .leading)
 
                             VStack(alignment: .leading, spacing: 3) {
                                 HStack(spacing: 16) {

@@ -79,14 +79,10 @@ struct LMSolver {
         // Helper: compute residuals (weighted)
         func residuals(_ params: [Double]) -> [Double] {
             let pd = /*paramDict*/(params)
-            return (0..<nData).map { i in
-//                do {
-                    let yhat =/* try*/ expression.evaluateFast(x: dataX[i], parameters: pd)
-                    return w[i] * (dataY[i] - yhat)
-//                } catch {
-//                    return 0.0   // treat as zero residual so RSS doesn't go NaN
-//                }
-            }
+			return (0..<nData).map { i in
+                let yhat = expression.evaluateFast(x: dataX[i], parameters: pd)
+                return w[i] * (dataY[i] - yhat)
+			}
         }
 
         // Helper: RSS
@@ -270,7 +266,7 @@ struct LMSolver {
     }
 
     // MARK: LU decomposition with partial pivoting
-    //
+    
     /// Factors A into P·A = L·U where P is a permutation, L is unit lower triangular, and U is upper triangular.  Returns (L, U, pivot) or nil if the matrix is singular.
     /// Advantages over Gauss-Jordan inversion:
     ///   • More numerically stable for nearly-singular JᵀJ (correlated params)

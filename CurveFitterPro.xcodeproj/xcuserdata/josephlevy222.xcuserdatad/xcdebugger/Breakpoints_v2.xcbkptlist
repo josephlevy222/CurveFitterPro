@@ -7,32 +7,16 @@
       <BreakpointProxy
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
-            uuid = "9CC86AE3-327F-4871-956B-6540CAF29B27"
-            shouldBeEnabled = "Yes"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            filePath = "CurveFitterPro/ModelLibraryViews.swift"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "264"
-            endingLineNumber = "264"
-            landmarkName = "saveAndForwardModel()"
-            landmarkType = "7">
-         </BreakpointContent>
-      </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
-            uuid = "CAE1D8DE-9BA2-45A9-9775-51676D9488DC"
+            uuid = "D959C7CE-4545-4F2D-85A0-8C1E296A9B3B"
             shouldBeEnabled = "No"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
-            filePath = "CurveFitterPro/ModelLibraryViews.swift"
+            filePath = "../../Library/Developer/Xcode/DerivedData/CurveFitterPro-fgshubdrirlypubjhicxvxutwcoj/SourcePackages/checkouts/Utilities/Sources/Utilities/ScrollsWithKeyboard.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "236"
-            endingLineNumber = "236"
-            landmarkName = "parseExpression()"
+            startingLineNumber = "146"
+            endingLineNumber = "146"
+            landmarkName = "handleKeyboard(_:isShowing:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>

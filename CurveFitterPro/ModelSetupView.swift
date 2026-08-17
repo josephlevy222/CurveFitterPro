@@ -30,6 +30,7 @@ struct ModelSetupView: View {
 					Button("Copy Saved Model…") { showClonedModel = true }
 					Spacer()
                     Button("New Custom…") { showCustomModel = true }
+					Spacer()
 					Button("Edit Custom Model…") { isEditingOldModel = true }
                 }
                 .buttonStyle(.borderless)
@@ -68,7 +69,7 @@ struct ParameterRow: View {
             HStack(alignment: .top) {
                 Text(param.name)
                     .font(.headline)
-                    .frame(width: 40, alignment: .leading)
+                    .frame(width: 80, alignment: .leading)
 
                 VStack(alignment: .leading, spacing: 4) {
                     // Initial value — always editable
